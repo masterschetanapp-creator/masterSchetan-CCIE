@@ -140,15 +140,19 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         red_flags = []
         traceback.print_exc()
 
-    # ── Step 7: Fetch news ────────────────────────────────────
-    update_progress("Gathering latest news...", 50)
+    # ── Step 7: Fetch news & concall transcripts ──────────────
+    update_progress("Gathering news & concall transcripts...", 50)
     try:
+        from data.news_fetcher import fetch_concall_transcripts
         news = fetch_company_news(company_name, symbol)
+        concalls = fetch_concall_transcripts(company_name, symbol)
         dossier["modules"]["news"] = news
+        dossier["modules"]["concall_transcripts"] = concalls
         set_cached(symbol, "news", {"news": news})
     except Exception as e:
         dossier["errors"].append(f"News fetch error: {str(e)}")
         news = []
+        dossier["modules"]["concall_transcripts"] = []
         traceback.print_exc()
 
     # ── Step 8: Dividends & Corporate Actions ─────────────────

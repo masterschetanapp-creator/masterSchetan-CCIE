@@ -309,17 +309,26 @@ def render_simple_view(dossier: dict):
         label="PIPELINE DISTINCTION", category="warning"
     )
 
-    # ── 10. Management's Plans & Guidance ─────────────────────
-    render_section_header("10. Management's Strategic Plans & Guidance", "🎯", "Forward plans")
+    # ── 10. Management Plans & Earnings Call Concall Transcripts ────
+    render_section_header("10. Management Plans & Earnings Call Concall Transcripts", "🎧", "Official analyst conference call filings & management guidance")
     guidance_data = [
         {"Theme": "Growth Guidance", "Management Indicator": "Targeting double-digit operational expansion", "Status": "Management Guidance - Not Guaranteed"},
         {"Theme": "Margin Target", "Management Indicator": "Focusing on margin expansion & cost control", "Status": "Planned Strategy"},
         {"Theme": "Digital Reach", "Management Indicator": "Expanding digital customer onboarding journeys", "Status": "Ongoing Implementation"},
     ]
     st.markdown(_render_html_table(["Theme", "Management Indicator", "Status"], guidance_data), unsafe_allow_html=True)
+    
+    concalls = modules.get("concall_transcripts", [])
+    if concalls:
+        st.markdown("**🎙️ Latest Earnings Call Concall Transcripts & Analyst Call Filings:**")
+        for item in concalls[:5]:
+            st.markdown(f"- **{item.get('date', '')}**: [{item.get('title', '')}]({item.get('url', '#')}) · <span class='badge badge-guidance'>{item.get('source', 'SEBI Filing')}</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("*Quarterly concall transcripts are filed with NSE/BSE under SEBI LODR Regulations.*")
+
     render_callout(
-        "FORWARD-LOOKING LABEL: All management targets and future plans are forward-looking guidance, not guaranteed outcomes.",
-        label="FORWARD-LOOKING LABEL", category="warning"
+        "CONCALL TRANSCRIPT SOURCE: Verbatim audio recordings and analyst call transcripts are mandated under SEBI Listing Regulations (LODR) to be filed with NSE & BSE within 24-48 hours of quarterly earnings calls.",
+        label="CONCALL FILING REGULATION", category="info"
     )
 
     # ── 11. What Should an Investor Monitor? ──────────────────
