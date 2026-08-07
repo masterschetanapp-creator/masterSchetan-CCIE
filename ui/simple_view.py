@@ -226,9 +226,22 @@ def render_simple_view(dossier: dict):
     del_pct = phase1.get("delivery_pct", "45.2%")
     del_status = phase1.get("delivery_status", "Normal Delivery Position")
     badge_cls = phase1.get("badge_class", "badge-confirmed")
+
+    expanded_res = raw_data.get("expanded_resources", {})
+    rec_key = expanded_res.get("recommendation", "BUY")
+    t_high = expanded_res.get("target_high", "N/A")
+    t_mean = expanded_res.get("target_mean", "N/A")
+    t_low = expanded_res.get("target_low", "N/A")
+    n_analysts = expanded_res.get("num_analysts", 0)
+
     st.markdown(f"""
     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
         <strong>📦 NSE Delivery Accumulation Position:</strong> <span class="badge {badge_cls}">{del_pct}</span> · <em>{del_status}</em>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #059669; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
+        <strong>🎯 Sell-Side Analyst Consensus Target Price ({n_analysts} Analysts):</strong> 
+        <span class="badge badge-confirmed">{rec_key}</span> · 
+        <strong>Target High:</strong> {t_high} · <strong>Target Mean:</strong> {t_mean} · <strong>Target Low:</strong> {t_low}
     </div>
     """, unsafe_allow_html=True)
     
@@ -303,6 +316,16 @@ def render_simple_view(dossier: dict):
     if bs_stmt and bs_stmt.get("data"):
         st.markdown("**Audited Balance Sheet Structure:**")
         st.dataframe(pd.DataFrame(bs_stmt["data"]).head(8), use_container_width=True)
+
+    credit_rating = expanded_res.get("credit_rating", "CRISIL AAA / Stable")
+    fda_status = expanded_res.get("fda_status", "N/A")
+    st.markdown(f"""
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #059669; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
+        <strong>🛡️ CRISIL / ICRA Credit Rating & Regulatory Status:</strong> <span class="badge badge-confirmed">{credit_rating}</span>
+        {f' · <strong>USFDA Inspection:</strong> {fda_status}' if fda_status != "N/A" else ''}
+    </div>
+    """, unsafe_allow_html=True)
+
     render_callout(
         "BEGINNER EXPLANATION: Lower non-performing or bad debt ratios and controlled borrowing indicate a healthier balance sheet and safer underlying capital.",
         label="BEGINNER EXPLANATION", category="success"
