@@ -238,73 +238,8 @@ def _render_dossier():
         from ui.analyst_view import render_analyst_view
         render_analyst_view(dossier)
 
-    # ── Ask This Company (Chatbot) ────────────────────────
-    st.markdown("---")
-    _render_chatbot(dossier)
-
     # ── Disclaimer ────────────────────────────────────────
     render_disclaimer()
-
-
-def _render_chatbot(dossier: dict):
-    """Render the 'Ask this Company' AI chatbot."""
-    company_name = dossier.get("modules", {}).get("company_snapshot", {}).get("name", "this company")
-
-    st.markdown(f"""
-    <div style="background: #ffffff; border-radius: 12px; padding: 1.5rem; border: 1px solid #e2e8f0; margin: 2rem 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-        <h3 style="margin: 0; color: #1d4ed8;">💬 Ask {company_name} AI — Verified Dossier Q&A</h3>
-        <p style="color: #64748b; margin: 0.25rem 0 1rem 0; font-size: 0.9rem;">AI answers strictly from the verified dossier and linked evidence database with citations.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    from ai.chatbot import CompanyChatbot
-    from ai.gemini_client import GeminiClient
-
-    try:
-        gemini = GeminiClient()
-        chatbot = CompanyChatbot(gemini, dossier)
-        suggestions = chatbot.get_suggested_questions()
-
-        cols = st.columns(min(len(suggestions), 3))
-        for i, q in enumerate(suggestions[:3]):
-            with cols[i]:
-                if st.button(f"💡 {q}", key=f"suggest_{i}", use_container_width=True):
-                    st.session_state.chat_history.append({"role": "user", "content": q})
-                    response = chatbot.ask(q)
-                    st.session_state.chat_history.append({"role": "assistant", "content": response})
-                    st.rerun()
-
-    except Exception:
-        pass
-
-    for msg in st.session_state.chat_history:
-        if msg["role"] == "user":
-            st.markdown(f"""
-            <div style="background: #eff6ff; border-left: 3px solid #2563eb; color: #0f172a; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.5rem;">
-                <strong>You:</strong> {msg['content']}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div style="background: #f0fdf4; border-left: 3px solid #059669; color: #0f172a; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.5rem;">
-                <strong>🤖 AI Analyst:</strong> {msg['content']}
-            </div>
-            """, unsafe_allow_html=True)
-
-    user_question = st.chat_input(f"Ask anything about {company_name}...")
-    if user_question:
-        st.session_state.chat_history.append({"role": "user", "content": user_question})
-        try:
-            gemini = GeminiClient()
-            chatbot = CompanyChatbot(gemini, dossier)
-            response = chatbot.ask(user_question)
-            st.session_state.chat_history.append({"role": "assistant", "content": response})
-        except Exception as e:
-            st.session_state.chat_history.append({
-                "role": "assistant",
-                "content": f"Error: {str(e)}"
-            })
-        st.rerun()
 
 
 def _render_footer():

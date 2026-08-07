@@ -449,16 +449,6 @@ def render_simple_view(dossier: dict):
     ]
     st.markdown(_render_html_table(["Change", "Why it Matters"], changelog), unsafe_allow_html=True)
 
-    # ── 23. Ask AI Example Questions ──────────────────────────
-    render_section_header(f"23. Ask {company_name} AI — Example Questions", "💬", "Suggested queries")
-    st.markdown(f"""
-    - *Why did profit increase in recent quarters for {company_name}?*
-    - *Is asset quality / bad debt / solvency improving?*
-    - *Explain the core business model of {company_name} in simple language.*
-    - *What are the top 3 risks facing this company in the {sector_name} sector?*
-    - *What did management guide for the upcoming fiscal year?*
-    """)
-
     # ── 24 & 25 & 26. Evidence Room & Source Register ──────────
     source_tracking = modules.get("source_tracking", {})
     render_evidence_room(source_tracking)
