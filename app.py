@@ -181,10 +181,25 @@ def _render_dossier():
 
     from ui.components import render_stock_header, render_view_toggle, render_disclaimer
 
-    # Top action bar
-    col1, col2 = st.columns([4, 1])
+    col1, col2 = st.columns([3, 1])
     with col2:
-        st.button("🖨️ Save Report / Print PDF", on_click=lambda: st.components.v1.html("<script>window.print();</script>", height=0))
+        st.components.v1.html("""
+            <button onclick="window.parent.print()" style="
+                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                color: #ffffff;
+                border: none;
+                padding: 0.65rem 1.2rem;
+                border-radius: 8px;
+                font-weight: 700;
+                font-size: 0.95rem;
+                cursor: pointer;
+                width: 100%;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+                transition: all 0.2s ease;
+            " onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1.0'">
+                🖨️ Save Report / Print PDF
+            </button>
+        """, height=45)
 
     # ── Stock Header ──────────────────────────────────────
     render_stock_header(

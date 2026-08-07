@@ -1,6 +1,7 @@
 """
 masterSchetan CCIE — Premium Report Styling & CSS
 Matches the exact theme and visual design of PNB_Complete_AI_Equity_Research_Report.pdf
+Includes comprehensive Print & PDF Export CSS rules.
 """
 
 import streamlit as st
@@ -176,12 +177,53 @@ tr:hover td {
 .metric-value { font-size: 1.6rem; font-weight: 800; color: #ffffff; margin: 0.3rem 0; }
 .metric-desc { font-size: 0.85rem; color: #cbd5e1; line-height: 1.4; }
 
-/* Print & PDF Export rules */
+/* Clean PDF & Print Rules */
 @media print {
-    [data-testid="stAppViewContainer"] { background-color: #ffffff !important; color: #000000 !important; }
-    .pdf-report-header { background: #0f172a !important; color: #ffffff !important; }
-    th { background-color: #1e293b !important; color: #ffffff !important; }
-    td { color: #000000 !important; }
+    body, [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+    }
+    
+    /* Hide search, radio buttons, chat box, iframe buttons during print */
+    .stTextInput, [data-testid="stRadio"], iframe, .stChatInput, [data-testid="stForm"] {
+        display: none !important;
+    }
+    
+    .pdf-report-header {
+        background: #0f172a !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .report-callout {
+        background: #f8fafc !important;
+        color: #0f172a !important;
+        border-left: 4px solid #3b82f6 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    
+    table {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    th {
+        background-color: #0f172a !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    td {
+        color: #0f172a !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+    
+    h1, h2, h3, h4 {
+        color: #0f172a !important;
+    }
 }
 """
 
