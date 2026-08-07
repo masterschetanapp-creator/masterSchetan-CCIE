@@ -125,6 +125,13 @@ def render_section_header(title: str, icon: str, description: str = None):
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_fact_badge(status: str) -> str:
+    """Returns HTML badge for fact status: Confirmed, Guidance, Estimate, Danger."""
+    status_lower = str(status).lower()
+    badge_class = "badge-confirmed" if "confirm" in status_lower else "badge-guidance" if "guidance" in status_lower or "plan" in status_lower else "badge-estimate" if "estimate" in status_lower else "badge-danger"
+    return f'<span class="badge {badge_class}">{status}</span>'
+
+
 def render_investor_questions(questions: list[str]):
     """'Questions an Investor Should Answer' section."""
     st.markdown("""
