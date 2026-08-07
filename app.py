@@ -83,7 +83,7 @@ def _render_search():
     """Render the stock search interface."""
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
-        st.markdown("<p style='text-align: center; color: #cbd5e1; font-weight: 500; font-size: 1.1rem;'>Enter any Indian stock name (e.g., PNB, Reliance, TCS, HDFC Bank, SBI)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #0f172a; font-weight: 600; font-size: 1.1rem;'>Enter any Indian stock name (e.g., PNB, Reliance, TCS, HDFC Bank, SBI)</p>", unsafe_allow_html=True)
 
         query = st.text_input(
             "Search",
