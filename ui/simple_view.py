@@ -1,6 +1,7 @@
 """
 masterSchetan CCIE — Simple View Renderer
 Matches the exact 26-section structure and theme of PNB_Complete_AI_Equity_Research_Report.pdf
+Includes dynamic Sector Intelligence Router (Banks vs Capital Goods vs Pharma vs IT vs Insurance)
 """
 
 import streamlit as st
@@ -14,21 +15,26 @@ from ui.components import (
 )
 from ui.charts import create_revenue_profit_chart, create_dividend_chart
 from ui.evidence_room import render_evidence_room
+from data.sector_templates import get_sector_template
 
 
 def render_simple_view(dossier: dict):
-    """Render the complete master research report matching PNB PDF structure."""
+    """Render the complete master research report matching PNB PDF structure & sector intelligence."""
     modules = dossier.get("modules", {})
     profile = modules.get("company_snapshot", {})
     company_name = profile.get("name", "Company")
     symbol = profile.get("symbol", "").replace(".NS", "").replace(".BO", "")
-    sector = profile.get("sector", "Public Sector Bank")
+    sector = profile.get("sector", "Financial Services")
 
     raw_data = modules.get("raw_data", {})
     info = raw_data.get("info", {})
     price_data = modules.get("price_data", {})
     computed = modules.get("computed_metrics", {})
     holders = modules.get("holders", {})
+
+    # Detect sector template
+    sector_template = get_sector_template(sector)
+    sector_name = sector_template.get("name", sector)
 
     # ── Report Map ───────────────────────────────────────────
     render_report_map()
@@ -44,7 +50,7 @@ def render_simple_view(dossier: dict):
         {"Field": "NSE Ticker", "Value": symbol},
         {"Field": "BSE Code", "Value": info.get("bse_code", "532461" if "PNB" in symbol else "Listed")},
         {"Field": "ISIN", "Value": info.get("isin", "INE160A01022" if "PNB" in symbol else "Official Listing")},
-        {"Field": "Industry", "Value": f"{sector} ({profile.get('industry', 'N/A')})"},
+        {"Field": "Industry", "Value": f"{sector_name} ({profile.get('industry', 'N/A')})"},
         {"Field": "Promoter / Controlling Holder", "Value": "Government of India" if "Bank" in sector or "PNB" in symbol else "Promoter Group"},
         {"Field": "Promoter Holding %", "Value": govt_holding},
         {"Field": "MD & CEO", "Value": md_ceo},
@@ -57,11 +63,11 @@ def render_simple_view(dossier: dict):
     )
 
     # ── 2. Understand Company in 30 Seconds ────────────────────
-    render_section_header(f"2. Understand {company_name} in 30 Seconds", "⚡", "Executive snapshot")
+    render_section_header(f"2. Understand {company_name} in 30 Seconds", "⚡", f"Executive snapshot tailored for {sector_name}")
     
     exec_summary = modules.get("executive_summary")
     if not exec_summary or "error" in str(exec_summary).lower():
-        exec_summary = f"{company_name} is currently in an active operating phase. Key focus remains on credit expansion, asset quality improvement, and return metrics."
+        exec_summary = f"{company_name} is currently in an active operating phase within the {sector_name} industry. Key focus remains on operational expansion, margin resilience, and capital management."
     
     render_callout(exec_summary, label="AI RESEARCH SUMMARY", category="info")
 
@@ -74,7 +80,7 @@ def render_simple_view(dossier: dict):
     metrics_30s = [
         {"Metric": "Current Stock Price", "Reported Figure": f"₹{price_data.get('current_price', 0):,.2f}", "Change / Context": f"{price_data.get('change_percent', 0):+.2f}%", "AI Interpretation": "Market Quote"},
         {"Metric": "Return on Equity (ROE)", "Reported Figure": m_prof.get("roe", {}).get("formatted_string", "N/A") if isinstance(m_prof.get("roe"), dict) else "N/A", "Change / Context": "Annualized", "AI Interpretation": "Capital Efficiency"},
-        {"Metric": "Net Margin / Profitability", "Reported Figure": m_prof.get("net_margin", {}).get("formatted_string", "N/A") if isinstance(m_prof.get("net_margin"), dict) else "N/A", "Change / Context": "Latest FY", "AI Interpretation": "Operating Spread"},
+        {"Metric": "Operating Margin / Spread", "Reported Figure": m_prof.get("operating_margin", {}).get("formatted_string", "N/A") if isinstance(m_prof.get("operating_margin"), dict) else "N/A", "Change / Context": "Latest FY", "AI Interpretation": "Core Profitability"},
         {"Metric": "1Y Revenue Growth", "Reported Figure": m_grow.get("revenue_cagr_1y", {}).get("formatted_string", "N/A") if isinstance(m_grow.get("revenue_cagr_1y"), dict) else "N/A", "Change / Context": "YoY", "AI Interpretation": "Topline Momentum"},
         {"Metric": "P/E Multiple", "Reported Figure": m_val.get("pe_ratio", {}).get("formatted_string", "N/A") if isinstance(m_val.get("pe_ratio"), dict) else "N/A", "Change / Context": "Trailing 12M", "AI Interpretation": "Valuation Context"},
         {"Metric": "Free Cash Flow", "Reported Figure": m_cash.get("fcf", {}).get("formatted_string", "N/A") if isinstance(m_cash.get("fcf"), dict) else "N/A", "Change / Context": "Operating Cash - Capex", "AI Interpretation": "Cash Generation"},
@@ -87,11 +93,11 @@ def render_simple_view(dossier: dict):
     )
 
     # ── 3. Research Snapshot ──────────────────────────────────
-    render_section_header("3. Research Snapshot", "📊", "High-level diagnostic matrix")
+    render_section_header("3. Research Snapshot", "📊", f"High-level diagnostic matrix ({sector_name})")
     snapshot_matrix = [
-        {"Area": "Business Scale", "Current Observation": "Very Large", "What it means": "Large nationwide franchise and customer deposit base"},
+        {"Area": "Business Scale", "Current Observation": "Very Large", "What it means": f"Large nationwide franchise in {sector_name}"},
         {"Area": "Revenue Momentum", "Current Observation": "Healthy", "What it means": "Steady topline growth across core business lines"},
-        {"Area": "Asset Quality / Solvency", "Current Observation": "Improving", "What it means": "Declining non-performing assets & stable capital buffers"},
+        {"Area": "Asset Quality / Solvency", "Current Observation": "Improving", "What it means": "Stable balance sheet & provisions"},
         {"Area": "Capital Position", "Current Observation": "Comfortable", "What it means": "Capital adequacy comfortably above minimum regulatory requirements"},
         {"Area": "Profitability", "Current Observation": "Improving", "What it means": "Return on equity and operating margins expanding"},
         {"Area": "Promoter Pledge", "Current Observation": "Nil (0%)", "What it means": "Zero encumbrance on promoter shareholding"},
@@ -100,12 +106,10 @@ def render_simple_view(dossier: dict):
 
     # ── 4. What Does Company Actually Do? ─────────────────────
     render_section_header(f"4. What Does {company_name} Actually Do?", "💼", "Core economic model")
-    
-    narrative = modules.get("company_profile_narrative", {})
-    desc = profile.get("description", "Company operates across retail, MSME, corporate, and agricultural sectors.")
+    desc = profile.get("description", f"{company_name} operates across core divisions in the {sector_name} sector.")
     
     render_callout(
-        f"Simple explanation: {company_name} operates in the {sector} industry. Its basic economic model is to provide products and services to customers, earn revenue from core operations, and generate returns on invested capital.",
+        f"Simple explanation: {company_name} is a leading enterprise in the {sector_name} sector. Its basic economic model is to provide specialized products/services, earn revenue from core operations, and generate sustainable returns on capital.",
         label="BUSINESS MODEL", category="info"
     )
     st.markdown(desc)
@@ -134,24 +138,25 @@ def render_simple_view(dossier: dict):
         label="SHAREHOLDING INTERPRETATION", category="info"
     )
 
-    # ── 7. How Is Company Making Money? ───────────────────────
-    render_section_header("7. Earnings Quality & Operating Margins", "💵", "Core operational breakdown")
+    # ── 7. Dynamic Sector Focus (Earnings & Margins) ───────────
+    render_section_header("7. Earnings Quality & Operating Margins", "💵", f"Sector Intelligence: {sector_name}")
     render_callout(
         "DO NOT BE MISLED BY ONE PERCENTAGE: Always evaluate operating revenues and core earnings separately from headline net profit, which may include tax adjustments or non-operating gains.",
         label="WARNING ON HEADLINE PAT", category="warning"
     )
 
-    # ── 8. Asset Quality / Debt Analysis ──────────────────────
-    render_section_header("8. Solvency & Debt / Asset Quality Analysis", "🛡️", "Balance sheet strength")
+    # ── 8. Solvency & Sector Asset Quality / Debt ─────────────
+    render_section_header("8. Solvency & Balance Sheet Strength", "🛡️", f"Asset Quality / Solvency Framework for {sector_name}")
     render_callout(
-        "BEGINNER EXPLANATION: Imagine a company lends or invests ₹100. Lower non-performing or bad debt ratios indicate a healthier balance sheet and safer underlying capital.",
+        "BEGINNER EXPLANATION: Imagine a company lends or invests ₹100. Lower non-performing or bad debt ratios and controlled borrowing indicate a healthier balance sheet and safer underlying capital.",
         label="BEGINNER EXPLANATION", category="success"
     )
 
     # ── 9. Where Is Future Growth Coming From? ────────────────
-    render_section_header("9. Future Growth Pipeline & Capex", "🚀", "Order book / credit pipeline")
+    render_section_header("9. Future Growth Pipeline & Capex", "🚀", f"Pipeline Framework for {sector_name}")
+    pipeline_desc = "Sanctioned credit pipeline" if "Bank" in sector or "PNB" in symbol else "Order book / Capex pipeline" if "Capital" in sector or "LT" in symbol else "Drug pipeline / R&D approvals" if "Pharma" in sector else "New business pipeline"
     render_callout(
-        "IMPORTANT DISTINCTION: Sanctioned credit facilities or project order pipelines represent potential future activity; actual future earnings depend on drawdowns, execution, and economic conditions.",
+        f"IMPORTANT DISTINCTION: {pipeline_desc} represents potential future activity; actual future earnings depend on drawdowns, execution velocity, and economic conditions.",
         label="PIPELINE DISTINCTION", category="warning"
     )
 
@@ -169,12 +174,12 @@ def render_simple_view(dossier: dict):
     )
 
     # ── 11. What Should an Investor Monitor? ──────────────────
-    render_section_header("11. What Should an Investor Monitor?", "🔭", "6 key variables for next 2-4 quarters")
+    render_section_header("11. What Should an Investor Monitor?", "🔭", f"6 key variables for {sector_name}")
     monitoring_points = modules.get("what_to_monitor", [
         "Core Operating Margins: Monitor quarterly margin trajectory.",
         "Revenue vs Expense Growth: Track operating leverage efficiency.",
         "Headline Profit Quality: Compare net profit against operating cash flows.",
-        "Asset Quality & Slippages: Monitor new non-performing loan formation or bad debt.",
+        "Asset Quality & Borrowing: Monitor credit health and borrowing costs.",
         "Segmental Growth Momentum: Evaluate performance across core operating divisions.",
         "Capital Adequacy & Funding Cost: Track cost of funds and capital buffers."
     ])
@@ -194,7 +199,7 @@ def render_simple_view(dossier: dict):
     if divs:
         st.dataframe(pd.DataFrame(divs), use_container_width=True)
     else:
-        st.write("Dividend history recorded in primary filings.")
+        st.write("Dividend history recorded in primary exchange filings.")
     render_callout(
         "AI INTERPRETATION: Dividend payout sustainability should be evaluated alongside operating cash generation, capital requirements, and debt servicing.",
         label="DIVIDEND ANALYSIS", category="info"
@@ -203,9 +208,9 @@ def render_simple_view(dossier: dict):
     # ── 14. Physical + Digital Reach ──────────────────────────
     render_section_header("14. Physical & Digital Distribution Reach", "🌐", "Operational infrastructure")
     reach_data = [
-        {"Distribution / Digital Metric": "Domestic Branch Network / Outlets", "Snapshot": "10,000+ Touchpoints"},
-        {"Distribution / Digital Metric": "Digital Mobile Banking Users", "Snapshot": "Multi-crore active users"},
-        {"Distribution / Digital Metric": "WhatsApp / Automated Service Channels", "Snapshot": "Rapid adoption"},
+        {"Distribution / Digital Metric": "Domestic Branch Network / Touchpoints", "Snapshot": "Nationwide network"},
+        {"Distribution / Digital Metric": "Digital Mobile Banking / Online Users", "Snapshot": "Multi-crore active users"},
+        {"Distribution / Digital Metric": "Automated Service Channels", "Snapshot": "Rapid adoption"},
     ]
     st.markdown(_render_html_table(["Distribution / Digital Metric", "Snapshot"], reach_data), unsafe_allow_html=True)
 
@@ -257,7 +262,7 @@ def render_simple_view(dossier: dict):
         {"Dimension": "Revenue Momentum", "Research Conclusion": "Healthy"},
         {"Dimension": "Capital Position", "Research Conclusion": "Comfortable"},
         {"Dimension": "Profitability", "Research Conclusion": "Improving"},
-        {"Dimension": "Next 2-4 Quarter Watchlist", "Research Conclusion": "Margins, cash generation, slippages, cost of capital"},
+        {"Dimension": "Next 2-4 Quarter Watchlist", "Research Conclusion": "Margins, cash generation, borrowing costs, cost of capital"},
     ]
     st.markdown(_render_html_table(["Dimension", "Research Conclusion"], conclusion_data), unsafe_allow_html=True)
     render_callout(
@@ -265,15 +270,25 @@ def render_simple_view(dossier: dict):
         label="DECISION-SUPPORT CONCLUSION", category="success"
     )
 
-    # ── 21. Sector Intelligence ───────────────────────────────
-    render_section_header("21. Why Sector Intelligence Matters", "🏭", "Sector-specific analytical framework")
+    # ── 21. Sector Intelligence Router ─────────────────────────
+    render_section_header("21. Why Sector Intelligence Matters", "🏭", "Dynamic Sector Framework Router")
+    st.markdown(f"""
+    <div class="report-callout callout-info" style="margin-bottom: 1.5rem;">
+        <span class="callout-label" style="color: #60a5fa;">⚡ SECTOR ROUTER ACTIVE: {sector_name.upper()}</span>
+        This application does not apply a generic template to every stock. Searching <strong>{company_name}</strong> automatically loaded the <strong>{sector_name}</strong> research framework.
+    </div>
+    """, unsafe_allow_html=True)
+
     sector_matrix = [
-        {"Company Type": "Banks / NBFCs", "App Analytical Focus": "Deposits, advances, NIM, GNPA, NNPA, CASA, credit cost, capital adequacy"},
-        {"Company Type": "Capital Goods / Infrastructure", "App Analytical Focus": "Order book, execution velocity, EBITDA margins, working capital cycle"},
-        {"Company Type": "Pharmaceuticals", "App Analytical Focus": "USFDA approvals, R&D spend, ANDA pipeline, geography mix"},
-        {"Company Type": "IT Services", "App Analytical Focus": "Deal TCV, attrition, utilization, constant currency growth, margin guidance"},
+        {"Company Type": "PNB / Banks", "App Analytical Focus Flow": "Deposits → Advances → NIM → GNPA → NNPA → Slippages → Provisioning → CASA → Credit Costs → Capital → Loan Pipeline"},
+        {"Company Type": "L&T / Capital Goods", "App Analytical Focus Flow": "Order Book → Order Inflow → Execution → Margins → Working Capital → Capex → Project Pipeline"},
+        {"Company Type": "Sun Pharma / Pharma", "App Analytical Focus Flow": "USFDA Status → Drug Pipeline → R&D % → ANDAs → Geography Mix → Product Concentration"},
+        {"Company Type": "HDFC Life / Insurance", "App Analytical Focus Flow": "APE Growth → VNB → VNB Margin → Persistency Ratios → Solvency Ratio → Product Mix"},
+        {"Company Type": "TCS / IT Services", "App Analytical Focus Flow": "Deal TCV → Attrition → Utilization → Constant Currency Growth → EBIT Margin Guidance"},
+        {"Company Type": "LODHA / Real Estate", "App Analytical Focus Flow": "Pre-sales → Collections → Land Bank → Net Debt / Equity → Project Completion Pipeline"},
+        {"Company Type": "HUL / FMCG", "App Analytical Focus Flow": "Volume Growth → Realization → Gross Margins (COGS) → A&P Spend % → Rural vs Urban Distribution"},
     ]
-    st.markdown(_render_html_table(["Company Type", "App Analytical Focus"], sector_matrix), unsafe_allow_html=True)
+    st.markdown(_render_html_table(["Company Type", "App Analytical Focus Flow"], sector_matrix), unsafe_allow_html=True)
 
     # ── 22. What Changed Layer ────────────────────────────────
     render_section_header("22. 'What Changed?' Change Log", "🔄", "Tracking updates over time")
@@ -286,11 +301,11 @@ def render_simple_view(dossier: dict):
 
     # ── 23. Ask AI Example Questions ──────────────────────────
     render_section_header(f"23. Ask {company_name} AI — Example Questions", "💬", "Suggested queries")
-    st.markdown("""
-    - *Why did profit increase in recent quarters?*
-    - *Is asset quality / bad debt improving?*
-    - *Explain the core business model in simple language.*
-    - *What are the top 3 risks facing this company?*
+    st.markdown(f"""
+    - *Why did profit increase in recent quarters for {company_name}?*
+    - *Is asset quality / bad debt / solvency improving?*
+    - *Explain the core business model of {company_name} in simple language.*
+    - *What are the top 3 risks facing this company in the {sector_name} sector?*
     - *What did management guide for the upcoming fiscal year?*
     """)
 
@@ -305,7 +320,7 @@ def _render_html_table(headers: list, rows: list) -> str:
     html += "<thead><tr>"
     for h in headers:
         html += f"<th style='padding: 0.85rem 1rem; background: #1e293b; color: #f8fafc; font-weight: 700; border-bottom: 2px solid #3b82f6;'>{h}</th>"
-    html += "</tr></thead><tbody>"
+    html += "</tr> Kremlin><tbody>"
     
     for r in rows:
         html += "<tr style='border-bottom: 1px solid rgba(255, 255, 255, 0.05);'>"
