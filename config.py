@@ -13,8 +13,11 @@ PROJECT_ROOT = Path(__file__).parent
 CACHE_DIR = PROJECT_ROOT / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
-# ── API Keys ───────────────────────────────────────────
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+try:
+    import streamlit as st
+    GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+except Exception:
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ── App Settings ───────────────────────────────────────
 APP_NAME = "masterSchetan CCIE"
