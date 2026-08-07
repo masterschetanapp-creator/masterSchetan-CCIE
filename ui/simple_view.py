@@ -1,7 +1,7 @@
 """
 masterSchetan CCIE — Simple View Renderer
 Matches the exact 26-section structure and theme of PNB_Complete_AI_Equity_Research_Report.pdf
-Includes dynamic Sector Intelligence Router & Real Corporate History Milestones with exact years.
+Includes dynamic Sector Intelligence Router, Real Corporate History Milestones, & Live Shareholding Parsing.
 """
 
 import streamlit as st
@@ -68,29 +68,44 @@ def render_simple_view(dossier: dict):
     sector_template = get_sector_template(sector)
     sector_name = sector_template.get("name", sector)
 
+    # Parse promoter holding % dynamically
+    insider_pct = info.get("heldPercentInsiders")
+    if insider_pct is not None and isinstance(insider_pct, (int, float)):
+        promoter_holding = f"{insider_pct * 100:.2f}%"
+    elif "PNB" in symbol:
+        promoter_holding = "70.08%"
+    else:
+        promoter_holding = f"{holders.get('major_holders', {}).get('promoters', 'Promoter Group Controlled')}"
+
+    # Parse institutional holding % dynamically
+    inst_pct = info.get("heldPercentInstitutions")
+    if inst_pct is not None and isinstance(inst_pct, (int, float)):
+        institutional_holding = f"{inst_pct * 100:.2f}%"
+    else:
+        institutional_holding = f"{holders.get('major_holders', {}).get('institutional', 'Institutional Participation')}"
+
     # ── Report Map ───────────────────────────────────────────
     render_report_map()
 
     # ── 1. Company Identity ──────────────────────────────────
     render_section_header("1. Company Identity", "🏢", "Core corporate registration and ownership")
     
-    govt_holding = "70.08%" if "PNB" in symbol else f"{holders.get('major_holders', {}).get('promoters', 'N/A')}"
     md_ceo = info.get("companyOfficers", [{}])[0].get("name", "Management Team") if info.get("companyOfficers") else "Management Team"
     
     identity_data = [
         {"Field": "Company Name", "Value": company_name},
         {"Field": "NSE Ticker", "Value": symbol},
-        {"Field": "BSE Code", "Value": info.get("bse_code", "532461" if "PNB" in symbol else "Listed")},
-        {"Field": "ISIN", "Value": info.get("isin", "INE160A01022" if "PNB" in symbol else "Official Listing")},
+        {"Field": "BSE Code", "Value": str(info.get("bse_code", "532461" if "PNB" in symbol else "Listed"))},
+        {"Field": "ISIN", "Value": str(info.get("isin", "INE160A01022" if "PNB" in symbol else "Official Listing"))},
         {"Field": "Industry", "Value": f"{sector_name} ({profile.get('industry', 'N/A')})"},
         {"Field": "Promoter / Controlling Holder", "Value": "Government of India" if "Bank" in sector or "PNB" in symbol else "Promoter Group"},
-        {"Field": "Promoter Holding %", "Value": govt_holding},
+        {"Field": "Promoter Holding %", "Value": promoter_holding},
         {"Field": "MD & CEO", "Value": md_ceo},
         {"Field": "Research Refreshed", "Value": dossier.get("generated_at", "7 Aug 2026")},
     ]
     st.markdown(_render_html_table(["Field", "Value"], identity_data), unsafe_allow_html=True)
     render_callout(
-        f"Source note: {company_name} official filings record its exchange listing and promoter shareholding. No promoter pledge reported. [S1, S2, S5]",
+        f"Source note: {company_name} official filings record its exchange listing and promoter shareholding ({promoter_holding}). No promoter pledge reported. [S1, S2, S5]",
         label="SOURCE NOTE", category="info"
     )
 
@@ -165,14 +180,14 @@ def render_simple_view(dossier: dict):
     render_section_header(f"6. Who Controls {company_name}?", "🏛️", "Ownership & shareholding pattern")
     
     shareholding_data = [
-        {"Holder Category": "Government / Promoter", "Holding %": govt_holding, "AI Observation": "Controlling equity stakeholder"},
-        {"Holder Category": "Foreign Institutional Investors (FII)", "Holding %": f"{holders.get('major_holders', {}).get('fii', '5.93%')}", "AI Observation": "Global institutional holding"},
-        {"Holder Category": "Domestic Institutional Investors (DII)", "Holding %": f"{holders.get('major_holders', {}).get('dii', '16.06%')}", "AI Observation": "Domestic fund participation"},
+        {"Holder Category": "Government / Promoter", "Holding %": promoter_holding, "AI Observation": "Controlling equity stakeholder"},
+        {"Holder Category": "Institutional Investors (FII / DII)", "Holding %": institutional_holding, "AI Observation": "Institutional fund participation"},
+        {"Holder Category": "Public & Other Shareholders", "Holding %": "Balance", "AI Observation": "Public equity float"},
         {"Holder Category": "Promoter Pledge", "Holding %": "0%", "AI Observation": "Zero promoter pledge reported"},
     ]
     st.markdown(_render_html_table(["Holder Category", "Holding %", "AI Observation"], shareholding_data), unsafe_allow_html=True)
     render_callout(
-        "AI INTERPRETATION: Institutional and controlling promoter shareholding provides strategic stability. Zero promoter pledge removes encumbrance risk.",
+        f"AI INTERPRETATION: Promoter shareholding of {promoter_holding} alongside institutional participation of {institutional_holding} provides governance stability. Zero promoter pledge removes encumbrance risk.",
         label="SHAREHOLDING INTERPRETATION", category="info"
     )
 
@@ -263,12 +278,13 @@ def render_simple_view(dossier: dict):
         label="FACT-CHECKING RULE", category="info"
     )
 
-    # ── 16. Upcoming Events ───────────────────────────────────
-    render_section_header("16. Upcoming Investor Calendar Events", "📅", "Tentative event schedule")
+    # ── 16. Upcoming Events (With Specific Timelines) ───────────
+    render_section_header("16. Upcoming Investor Calendar Events", "📅", "Specific upcoming result & concall schedule")
     events_data = [
-        {"Event": "Q2 Financial Results", "Expected Timing": "October / November", "App Treatment": "Tentative intimation"},
-        {"Event": "Q3 Financial Results", "Expected Timing": "January / February", "App Treatment": "Tentative intimation"},
-        {"Event": "Annual General Meeting", "Expected Timing": "June / July", "App Treatment": "Official disclosure"},
+        {"Event": "Q2 FY27 Financial Results & Board Meeting", "Expected Timing": "20 - 30 October 2026", "App Treatment": "Tentative exchange intimation"},
+        {"Event": "Q3 FY27 Financial Results & Board Meeting", "Expected Timing": "20 - 31 January 2027", "App Treatment": "Tentative exchange intimation"},
+        {"Event": "Annual General Meeting (AGM)", "Expected Timing": "July / August 2026", "App Treatment": "Official exchange disclosure"},
+        {"Event": "Earnings Call & Transcript Filing", "Expected Timing": "Within 24 hours of quarterly results", "App Treatment": "Exchange intimation"},
     ]
     st.markdown(_render_html_table(["Event", "Expected Timing", "App Treatment"], events_data), unsafe_allow_html=True)
 
