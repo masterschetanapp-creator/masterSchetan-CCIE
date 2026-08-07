@@ -429,26 +429,6 @@ def render_simple_view(dossier: dict):
         label="DECISION-SUPPORT CONCLUSION", category="success"
     )
 
-    # ── 21. Sector Intelligence Router ─────────────────────────
-    render_section_header("21. Why Sector Intelligence Matters", "🏭", "Dynamic Sector Framework Router")
-    st.markdown(f"""
-    <div class="report-callout callout-info" style="margin-bottom: 1.5rem;">
-        <span class="callout-label" style="color: #2563eb;">⚡ SECTOR ROUTER ACTIVE: {sector_name.upper()}</span>
-        This application does not apply a generic template to every stock. Searching <strong>{company_name}</strong> automatically loaded the <strong>{sector_name}</strong> research framework.
-    </div>
-    """, unsafe_allow_html=True)
-
-    sector_matrix = [
-        {"Company Type": "PNB / Banks", "App Analytical Focus Flow": "Deposits → Advances → NIM → GNPA → NNPA → Slippages → Provisioning → CASA → Credit Costs → Capital → Loan Pipeline"},
-        {"Company Type": "L&T / Capital Goods", "App Analytical Focus Flow": "Order Book → Order Inflow → Execution → Margins → Working Capital → Capex → Project Pipeline"},
-        {"Company Type": "Sun Pharma / Pharma", "App Analytical Focus Flow": "USFDA Status → Drug Pipeline → R&D % → ANDAs → Geography Mix → Product Concentration"},
-        {"Company Type": "HDFC Life / Insurance", "App Analytical Focus Flow": "APE Growth → VNB → VNB Margin → Persistency Ratios → Solvency Ratio → Product Mix"},
-        {"Company Type": "TCS / IT Services", "App Analytical Focus Flow": "Deal TCV → Attrition → Utilization → Constant Currency Growth → EBIT Margin Guidance"},
-        {"Company Type": "LODHA / Real Estate", "App Analytical Focus Flow": "Pre-sales → Collections → Land Bank → Net Debt / Equity → Project Completion Pipeline"},
-        {"Company Type": "HUL / FMCG", "App Analytical Focus Flow": "Volume Growth → Realization → Gross Margins (COGS) → A&P Spend % → Rural vs Urban Distribution"},
-    ]
-    st.markdown(_render_html_table(["Company Type", "App Analytical Focus Flow"], sector_matrix), unsafe_allow_html=True)
-
     # ── 22. What Changed Layer ────────────────────────────────
     render_section_header("22. 'What Changed?' Change Log", "🔄", "Tracking updates over time")
     changelog = [
