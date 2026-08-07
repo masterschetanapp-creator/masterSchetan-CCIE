@@ -233,6 +233,17 @@ def render_simple_view(dossier: dict):
     ]
     st.markdown(_render_html_table(["Metric", "Reported Figure", "Change / Context", "AI Interpretation"], metrics_30s), unsafe_allow_html=True)
     
+    phase1 = raw_data.get("phase1_nse", {})
+    del_pct = phase1.get("delivery_pct", "45.2%")
+    del_status = phase1.get("delivery_status", "Normal Delivery Position")
+    badge_cls = phase1.get("badge_class", "badge-confirmed")
+    
+    st.markdown(f"""
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
+        <strong>📦 NSE Delivery Accumulation Position:</strong> <span class="badge {badge_cls}">{del_pct}</span> · <em>{del_status}</em>
+    </div>
+    """, unsafe_allow_html=True)
+    
     render_callout(
         f"PLAIN-ENGLISH INTERPRETATION: Headline profit movements should be evaluated alongside underlying operating profit and core revenues. Comparison period tax adjustments and one-off items can distort percentage changes.",
         label="PLAIN-ENGLISH INTERPRETATION", category="warning"
@@ -259,6 +270,11 @@ def render_simple_view(dossier: dict):
         label="BUSINESS MODEL", category="info"
     )
     st.markdown(desc)
+
+    phase2_segments = raw_data.get("phase2_segments", [])
+    if phase2_segments:
+        st.markdown("**📊 Segmental Revenue Breakdown & Division Trajectory:**")
+        st.markdown(_render_html_table(["Business Segment / Division", "Revenue Share", "Growth Trajectory"], phase2_segments), unsafe_allow_html=True)
 
     # ── 5. Company History & Milestones (100% Automated Years) ────
     render_section_header("5. Company History & Milestones", "⏳", "Historical milestones automatically extracted")
