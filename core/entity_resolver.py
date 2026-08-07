@@ -58,6 +58,8 @@ COMMON_STOCKS = {
     "SBILIFE": {"symbol": "SBILIFE.NS", "name": "SBI Life Insurance Company", "exchange": "NSE"},
     "GRASIM": {"symbol": "GRASIM.NS", "name": "Grasim Industries Limited", "exchange": "NSE"},
     "TECHM": {"symbol": "TECHM.NS", "name": "Tech Mahindra Limited", "exchange": "NSE"},
+    "PINE LABS": {"symbol": "PINELABS.NS", "name": "Pine Labs Limited", "exchange": "NSE"},
+    "PINELABS": {"symbol": "PINELABS.NS", "name": "Pine Labs Limited", "exchange": "NSE"},
     "EICHERMOT": {"symbol": "EICHERMOT.NS", "name": "Eicher Motors Limited", "exchange": "NSE"},
     "INDUSINDBK": {"symbol": "INDUSINDBK.NS", "name": "IndusInd Bank Limited", "exchange": "NSE"},
     "DRREDDY": {"symbol": "DRREDDY.NS", "name": "Dr. Reddy's Laboratories", "exchange": "NSE"},

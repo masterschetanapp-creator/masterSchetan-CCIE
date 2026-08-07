@@ -163,13 +163,16 @@ def fetch_price_data(symbol: str) -> Dict[str, Any]:
         hist = ticker.history(period="1mo")
         if hist.empty:
             info = ticker.info or {}
-            return {
-                "current_price": info.get("currentPrice") or info.get("regularMarketPrice") or 0.0,
-                "change_percent": 0.0,
-                "volume": info.get("volume") or 0,
-                "vwap": 0.0,
+            current_val = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or info.get("regularMarketPreviousClose") or 0.0
+            prev_val = info.get("regularMarketPreviousClose") or info.get("previousClose") or current_val
+            change_pct = ((current_val - prev_val) / prev_val) * 100 if prev_val else 0.0
+            return convert_types({
+                "current_price": current_val,
+                "change_percent": change_pct,
+                "volume": info.get("volume") or info.get("regularMarketVolume") or 0,
+                "vwap": current_val,
                 "history": []
-            }
+            })
             
         current = float(hist['Close'].iloc[-1])
         prev = float(hist['Close'].iloc[-2]) if len(hist) > 1 else current
