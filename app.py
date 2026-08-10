@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="masterSchetan CCIE — Indian Equity Research Engine",
     page_icon="🔍",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 from config import APP_NAME, APP_TAGLINE, APP_VERSION
@@ -35,6 +35,7 @@ if "search_triggered" not in st.session_state:
 
 
 def main():
+    _render_sidebar()
     _render_header()
     
     # Stock Search Bar
@@ -54,6 +55,48 @@ def main():
             _render_welcome_screen()
 
     _render_footer()
+
+
+def _render_sidebar():
+    """Render sidebar for AI API Keys & Provider Quotas."""
+    with st.sidebar:
+        st.markdown("### 🤖 Multi-Model AI Engines")
+        st.caption("Powered by Zero-Cost AI Integration")
+        
+        from ai.gemini_client import GeminiClient
+        try:
+            client = GeminiClient()
+            status = client.get_provider_status()
+            
+            st.markdown("**Provider Status:**")
+            name_map = {
+                'gemini': 'Google Gemini 2.5',
+                'groq': 'GroqCloud (Llama 3.3)',
+                'openrouter': 'OpenRouter (Nemotron)',
+                'deepseek': 'DeepSeek R1 / V3'
+            }
+            for provider, data in status.items():
+                icon = "🟢" if data['configured'] else "⚪"
+                state_text = "Active" if data['configured'] else "Not Configured"
+                st.markdown(f"{icon} **{name_map[provider]}**: {state_text}")
+        except Exception:
+            pass
+            
+        st.markdown("---")
+        with st.expander("🔑 Add / Change Free API Keys", expanded=False):
+            st.markdown("Keys are stored in session memory only.")
+            gemini_k = st.text_input("Google Gemini API Key", value=os.getenv("GEMINI_API_KEY", ""), type="password", key="input_gemini_k")
+            groq_k = st.text_input("Groq API Key", value=os.getenv("GROQ_API_KEY", ""), type="password", key="input_groq_k")
+            openrouter_k = st.text_input("OpenRouter API Key", value=os.getenv("OPENROUTER_API_KEY", ""), type="password", key="input_openrouter_k")
+            deepseek_k = st.text_input("DeepSeek API Key", value=os.getenv("DEEPSEEK_API_KEY", ""), type="password", key="input_deepseek_k")
+            
+            if st.button("Save & Update AI Engines", use_container_width=True):
+                if gemini_k: os.environ["GEMINI_API_KEY"] = gemini_k
+                if groq_k: os.environ["GROQ_API_KEY"] = groq_k
+                if openrouter_k: os.environ["OPENROUTER_API_KEY"] = openrouter_k
+                if deepseek_k: os.environ["DEEPSEEK_API_KEY"] = deepseek_k
+                st.success("API keys updated successfully!")
+                st.rerun()
 
 
 def _render_header():
