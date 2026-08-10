@@ -15,7 +15,7 @@ def render_stock_header(profile: dict, price_data: dict):
     price = price_data.get("current_price", 0.0)
     change = price_data.get("change_percent", 0.0)
     
-    color_style = "color: #34d399;" if change >= 0 else "color: #f87171;"
+    color_style = "color: #059669;" if change >= 0 else "color: #dc2626;"
     sign = "+" if change >= 0 else ""
 
     html = f"""
@@ -26,7 +26,7 @@ def render_stock_header(profile: dict, price_data: dict):
         </div>
         <div class="pdf-header-title">{company_name}</div>
         <div class="pdf-header-subtitle">Complete AI Equity Research Report</div>
-        <div style="margin: 0.5rem 0 1rem 0; font-size: 1.5rem; font-weight: 700; color: #ffffff;">
+        <div style="margin: 0.5rem 0 1rem 0; font-size: 1.5rem; font-weight: 700; color: #0f172a;">
             Current Price: ₹{price:,.2f} <span style="{color_style} font-size: 1.1rem; margin-left: 0.5rem;">({sign}{change:.2f}%)</span>
         </div>
         <div class="pdf-header-meta">

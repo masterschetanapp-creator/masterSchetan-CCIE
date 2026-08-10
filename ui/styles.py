@@ -38,14 +38,15 @@ p, li, span, td {
     color: #1e293b;
 }
 
-/* Report Header Banner (Deep Navy Accent Header) */
+/* Report Header Banner (Crisp White Corporate Card) */
 .pdf-report-header {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 6px solid #2563eb;
     border-radius: 12px;
     padding: 1.75rem 2rem;
     margin-bottom: 2rem;
-    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
 }
 
 .pdf-header-top {
@@ -53,7 +54,7 @@ p, li, span, td {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #60a5fa;
+    color: #2563eb;
     margin-bottom: 0.5rem;
     display: flex;
     justify-content: space-between;
@@ -62,24 +63,26 @@ p, li, span, td {
 .pdf-header-title {
     font-size: 2.4rem;
     font-weight: 800;
-    color: #ffffff;
+    color: #0f172a;
     margin: 0.25rem 0;
 }
 
 .pdf-header-subtitle {
     font-size: 1.1rem;
-    color: #cbd5e1;
-    margin-bottom: 1rem;
+    color: #475569;
+    font-weight: 500;
 }
 
 .pdf-header-meta {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
-    font-size: 0.85rem;
-    color: #e2e8f0;
-    border-top: 1px solid rgba(255,255,255,0.15);
-    padding-top: 0.75rem;
+    align-items: center;
+    color: #334155;
+    font-size: 0.95rem;
 }
 
 /* Callout Boxes (Light Corporate Style) */
