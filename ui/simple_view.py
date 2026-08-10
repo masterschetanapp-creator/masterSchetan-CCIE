@@ -219,7 +219,11 @@ def render_simple_view(dossier: dict):
     render_section_header(f"2. Understand {company_name} in 30 Seconds", "⚡", f"Executive snapshot tailored for {sector_name}")
     exec_summary = modules.get("executive_summary")
     if not exec_summary or "error" in str(exec_summary).lower():
-        exec_summary = f"{company_name} is currently in an active operating phase within the {sector_name} industry. Key focus remains on operational expansion, margin resilience, and capital management."
+        ctso_thread = modules.get("ctso", {}).get("golden_thread", "")
+        if ctso_thread:
+            exec_summary = ctso_thread
+        else:
+            exec_summary = f"{company_name} is currently in an active operating phase within the {sector_name} industry. Key focus remains on operational expansion, margin resilience, and capital management."
     render_callout(exec_summary, label="AI RESEARCH SUMMARY", category="info")
 
     m_prof = computed.get("profitability", {})
@@ -227,13 +231,63 @@ def render_simple_view(dossier: dict):
     m_val = computed.get("valuation", {})
     m_cash = computed.get("cash_flow_quality", {})
 
+    # Helper for dynamic metric interpretation
+    def _get_interp(metric_dict: dict, metric_type: str) -> str:
+        if not isinstance(metric_dict, dict):
+            return f"Data being compiled for {metric_type}"
+        val = metric_dict.get("value")
+        expl = metric_dict.get("explanation")
+        if val is None:
+            return "Metric unavailable in primary filings"
+        
+        if metric_type == "roe":
+            if val >= 15:
+                return f"Strong capital efficiency ({val:.1f}% > 15% benchmark)"
+            elif val >= 10:
+                return f"Moderate capital efficiency ({val:.1f}% returns)"
+            else:
+                return f"Subpar capital efficiency ({val:.1f}% < 10% target)"
+        elif metric_type == "op_margin":
+            if val >= 25:
+                return f"High operating spread ({val:.1f}% core margin)"
+            elif val >= 12:
+                return f"Healthy operating margin ({val:.1f}%)"
+            else:
+                return f"Thin margin spread ({val:.1f}%)"
+        elif metric_type == "revenue_growth":
+            if val >= 15:
+                return f"Strong topline expansion (+{val:.1f}% YoY)"
+            elif val >= 0:
+                return f"Steady topline momentum (+{val:.1f}% YoY)"
+            else:
+                return f"Revenue contraction ({val:.1f}% YoY)"
+        elif metric_type == "pe":
+            if val >= 30:
+                return f"Premium growth multiple ({val:.1f}x P/E)"
+            elif val >= 12:
+                return f"Fair market multiple ({val:.1f}x P/E)"
+            else:
+                return f"Deep value / Low multiple ({val:.1f}x P/E)"
+        elif metric_type == "fcf":
+            if val > 0:
+                return f"Positive cash surplus ({metric_dict.get('formatted_string', 'Surplus')})"
+            else:
+                return f"Cash flow deficit ({metric_dict.get('formatted_string', 'Deficit')})"
+        return expl or "Data evaluated"
+
+    roe_d = m_prof.get("roe", {}) if isinstance(m_prof.get("roe"), dict) else {}
+    op_d = m_prof.get("operating_margin", {}) if isinstance(m_prof.get("operating_margin"), dict) else {}
+    rev_d = m_grow.get("revenue_cagr_1y", {}) if isinstance(m_grow.get("revenue_cagr_1y"), dict) else {}
+    pe_d = m_val.get("pe_ratio", {}) if isinstance(m_val.get("pe_ratio"), dict) else {}
+    fcf_d = m_cash.get("fcf", {}) if isinstance(m_cash.get("fcf"), dict) else {}
+
     metrics_30s = [
-        {"Metric": "Current Stock Price", "Reported Figure": f"₹{price_data.get('current_price', 0):,.2f}", "Change / Context": f"{price_data.get('change_percent', 0):+.2f}%", "AI Interpretation": "Market Quote"},
-        {"Metric": "Return on Equity (ROE)", "Reported Figure": m_prof.get("roe", {}).get("formatted_string", "N/A") if isinstance(m_prof.get("roe"), dict) else "N/A", "Change / Context": "Annualized", "AI Interpretation": "Capital Efficiency"},
-        {"Metric": "Operating Margin / Spread", "Reported Figure": m_prof.get("operating_margin", {}).get("formatted_string", "N/A") if isinstance(m_prof.get("operating_margin"), dict) else "N/A", "Change / Context": "Latest FY", "AI Interpretation": "Core Profitability"},
-        {"Metric": "1Y Revenue Growth", "Reported Figure": m_grow.get("revenue_cagr_1y", {}).get("formatted_string", "N/A") if isinstance(m_grow.get("revenue_cagr_1y"), dict) else "N/A", "Change / Context": "YoY", "AI Interpretation": "Topline Momentum"},
-        {"Metric": "P/E Multiple", "Reported Figure": m_val.get("pe_ratio", {}).get("formatted_string", "N/A") if isinstance(m_val.get("pe_ratio"), dict) else "N/A", "Change / Context": "Trailing 12M", "AI Interpretation": "Valuation Context"},
-        {"Metric": "Free Cash Flow", "Reported Figure": m_cash.get("fcf", {}).get("formatted_string", "N/A") if isinstance(m_cash.get("fcf"), dict) else "N/A", "Change / Context": "Operating Cash - Capex", "AI Interpretation": "Cash Generation"},
+        {"Metric": "Current Stock Price", "Reported Figure": f"₹{price_data.get('current_price', 0):,.2f}", "Change / Context": f"{price_data.get('change_percent', 0):+.2f}%", "AI Interpretation": f"{'Positive' if price_data.get('change_percent', 0) >= 0 else 'Negative'} daily market momentum"},
+        {"Metric": "Return on Equity (ROE)", "Reported Figure": roe_d.get("formatted_string", "N/A"), "Change / Context": "Annualized", "AI Interpretation": _get_interp(roe_d, "roe")},
+        {"Metric": "Operating Margin / Spread", "Reported Figure": op_d.get("formatted_string", "N/A"), "Change / Context": "Latest FY", "AI Interpretation": _get_interp(op_d, "op_margin")},
+        {"Metric": "1Y Revenue Growth", "Reported Figure": rev_d.get("formatted_string", "N/A"), "Change / Context": "YoY", "AI Interpretation": _get_interp(rev_d, "revenue_growth")},
+        {"Metric": "P/E Multiple", "Reported Figure": pe_d.get("formatted_string", "N/A"), "Change / Context": "Trailing 12M", "AI Interpretation": _get_interp(pe_d, "pe")},
+        {"Metric": "Free Cash Flow", "Reported Figure": fcf_d.get("formatted_string", "N/A"), "Change / Context": "Operating Cash - Capex", "AI Interpretation": _get_interp(fcf_d, "fcf")},
     ]
     st.markdown(_render_html_table(["Metric", "Reported Figure", "Change / Context", "AI Interpretation"], metrics_30s), unsafe_allow_html=True)
     
@@ -260,8 +314,14 @@ def render_simple_view(dossier: dict):
     </div>
     """, unsafe_allow_html=True)
     
+    ctso = modules.get("ctso", {})
+    if ctso.get("golden_thread"):
+        plain_interp = f"PLAIN-ENGLISH INTERPRETATION: {ctso['golden_thread']}"
+    else:
+        plain_interp = f"PLAIN-ENGLISH INTERPRETATION: {company_name}'s operational metrics show an operating spread of {op_d.get('formatted_string', 'N/A')} and ROE of {roe_d.get('formatted_string', 'N/A')}. Evaluate headline profit alongside core operating cash flow generation."
+    
     render_callout(
-        f"PLAIN-ENGLISH INTERPRETATION: Headline profit movements should be evaluated alongside underlying operating profit and core revenues. Comparison period tax adjustments and one-off items can distort percentage changes.",
+        plain_interp,
         label="PLAIN-ENGLISH INTERPRETATION", category="warning"
     )
 
