@@ -46,21 +46,21 @@ def render_stock_header(profile: dict, price_data: dict):
 
 
 def render_report_map():
-    """Render 10-point Report Map (Table of Contents from Page 2)."""
+    """Render 10-point Report Map (Investor Priority Sequence)."""
     html = """
     <div class="report-callout callout-warning" style="margin-bottom: 2rem;">
-        <span class="callout-label" style="color: #fbbf24;">📍 Report Map & Navigation</span>
+        <span class="callout-label" style="color: #d97706;">📍 Report Map & Navigation (Investor Priority Order)</span>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
-            <div>1. Identity & 30-Second Summary</div>
-            <div>2. Research Snapshot & Business Model</div>
-            <div>3. History & Ownership</div>
-            <div>4. Earnings Quality & Asset Quality</div>
-            <div>5. Future Growth & Management Plans</div>
-            <div>6. Monitoring Points & Governance</div>
-            <div>7. Dividend & Distribution Reach</div>
-            <div>8. Developments & Upcoming Events</div>
-            <div>9. Catalysts, Risks & Conclusion</div>
-            <div>10. Evidence Room & Source Register</div>
+            <div>1. Central Thesis & 30s Summary</div>
+            <div>2. Forensic Red Flag Audit (Risk Check)</div>
+            <div>3. Earnings Quality & Margins</div>
+            <div>4. Solvency & Balance Sheet</div>
+            <div>5. Future Growth & Guidance</div>
+            <div>6. Catalysts, SWOT & Peer Valuation</div>
+            <div>7. Business Model & Shareholding</div>
+            <div>8. Decision Support & Dividend History</div>
+            <div>9. Reach, News & Event Calendar</div>
+            <div>10. History, Evidence & Disclosures</div>
         </div>
     </div>
     """

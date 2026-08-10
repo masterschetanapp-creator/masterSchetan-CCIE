@@ -182,28 +182,8 @@ def render_simple_view(dossier: dict):
     # ── Report Map ───────────────────────────────────────────
     render_report_map()
 
-    # ── Section 1: Company Identity ───────────────────────────
-    render_section_header("1. Company Identity", "🏢", "Core corporate registration and ownership")
-    md_ceo = info.get("companyOfficers", [{}])[0].get("name", "Management Team") if info.get("companyOfficers") else "Management Team"
-    identity_data = [
-        {"Field": "Company Name", "Value": company_name},
-        {"Field": "NSE Ticker", "Value": symbol},
-        {"Field": "BSE Code", "Value": str(info.get("bse_code", "532461" if "PNB" in symbol else "Listed"))},
-        {"Field": "ISIN", "Value": str(info.get("isin", "INE160A01022" if "PNB" in symbol else "Official Listing"))},
-        {"Field": "Industry", "Value": f"{sector_name} ({profile.get('industry', 'N/A')})"},
-        {"Field": "Promoter / Controlling Holder", "Value": "Government of India" if "Bank" in sector or "PNB" in symbol else "Promoter Group"},
-        {"Field": "Promoter Holding %", "Value": promoter_holding},
-        {"Field": "MD & CEO", "Value": md_ceo},
-        {"Field": "Research Refreshed", "Value": dossier.get("generated_at", "7 Aug 2026")},
-    ]
-    st.markdown(_render_html_table(["Field", "Value"], identity_data), unsafe_allow_html=True)
-    render_callout(
-        f"Source note: {company_name} official disclosures record its exchange listing and promoter shareholding ({promoter_holding}). No promoter pledge reported. [S1, S2, S5]",
-        label="SOURCE NOTE", category="info"
-    )
-
-    # ── Display Central Investment Thesis ─────────────────────
-    ctso = dossier["modules"].get("ctso", {})
+    # ── Section 1: Central Investment Thesis & 30-Second Summary ──────────────
+    ctso = dossier.get("modules", {}).get("ctso", {})
     if ctso.get("golden_thread"):
         archetype = ctso.get("archetype", "").replace("_", " ").title()
         conviction = ctso.get("conviction_level", "")
@@ -215,8 +195,7 @@ def render_simple_view(dossier: dict):
         </div>
         ''', unsafe_allow_html=True)
 
-    # ── Section 2: Understand Company in 30 Seconds ───────────
-    render_section_header(f"2. Understand {company_name} in 30 Seconds", "⚡", f"Executive snapshot tailored for {sector_name}")
+    render_section_header(f"1. Understand {company_name} in 30 Seconds", "⚡", f"Executive snapshot tailored for {sector_name}")
     exec_summary = modules.get("executive_summary")
     if not exec_summary or "error" in str(exec_summary).lower():
         ctso_thread = modules.get("ctso", {}).get("golden_thread", "")
@@ -231,7 +210,6 @@ def render_simple_view(dossier: dict):
     m_val = computed.get("valuation", {})
     m_cash = computed.get("cash_flow_quality", {})
 
-    # Helper for dynamic metric interpretation
     def _get_interp(metric_dict: dict, metric_type: str) -> str:
         if not isinstance(metric_dict, dict):
             return f"Data being compiled for {metric_type}"
@@ -314,7 +292,6 @@ def render_simple_view(dossier: dict):
     </div>
     """, unsafe_allow_html=True)
     
-    ctso = modules.get("ctso", {})
     if ctso.get("golden_thread"):
         plain_interp = f"PLAIN-ENGLISH INTERPRETATION: {ctso['golden_thread']}"
     else:
@@ -325,8 +302,24 @@ def render_simple_view(dossier: dict):
         label="PLAIN-ENGLISH INTERPRETATION", category="warning"
     )
 
-    # ── Section 3: Research Snapshot ──────────────────────────
-    render_section_header("3. Research Snapshot", "📊", f"High-level diagnostic matrix ({sector_name})")
+    # ── Section 2: Company Identity & Core Metadata ────────────────────────────
+    render_section_header("2. Company Identity & Core Metadata", "🏢", "Core corporate registration and ownership")
+    md_ceo = info.get("companyOfficers", [{}])[0].get("name", "Management Team") if info.get("companyOfficers") else "Management Team"
+    identity_data = [
+        {"Field": "Company Name", "Value": company_name},
+        {"Field": "NSE Ticker", "Value": symbol},
+        {"Field": "BSE Code", "Value": str(info.get("bse_code", "532461" if "PNB" in symbol else "Listed"))},
+        {"Field": "ISIN", "Value": str(info.get("isin", "INE160A01022" if "PNB" in symbol else "Official Listing"))},
+        {"Field": "Industry", "Value": f"{sector_name} ({profile.get('industry', 'N/A')})"},
+        {"Field": "Promoter / Controlling Holder", "Value": "Government of India" if "Bank" in sector or "PNB" in symbol else "Promoter Group"},
+        {"Field": "Promoter Holding %", "Value": promoter_holding},
+        {"Field": "MD & CEO", "Value": md_ceo},
+        {"Field": "Research Refreshed", "Value": dossier.get("generated_at", "10 Aug 2026")},
+    ]
+    st.markdown(_render_html_table(["Field", "Value"], identity_data), unsafe_allow_html=True)
+
+    # ── Section 3: AI Diagnostic Research Snapshot ─────────────────────────────
+    render_section_header("3. AI Diagnostic Research Snapshot", "📊", f"High-level diagnostic matrix ({sector_name})")
     snapshot = dossier.get("modules", {}).get("research_snapshot", {})
     snapshot_matrix = [
         {"Area": "Business Scale", "Observation": snapshot.get("business_scale", "N/A")},
@@ -338,47 +331,19 @@ def render_simple_view(dossier: dict):
     ]
     st.markdown(_render_html_table(["Area", "Observation"], snapshot_matrix), unsafe_allow_html=True)
 
-    # ── Section 4: What Does Company Actually Do? ─────────────
-    render_section_header(f"4. What Does {company_name} Actually Do?", "💼", "Core economic model")
-    comp_narrative = modules.get("company_profile_narrative", {})
-    if isinstance(comp_narrative, dict) and comp_narrative.get("business_model"):
-        st.markdown(f'<div class="report-callout">{comp_narrative["business_model"]}</div>', unsafe_allow_html=True)
-    elif info.get("longBusinessSummary"):
-        st.markdown(f'<div class="report-callout">{info["longBusinessSummary"]}</div>', unsafe_allow_html=True)
+    # ── Section 4: 15-Point Forensic Red Flag Audit ───────────────────────────
+    render_section_header("4. 15-Point Forensic Red Flag Audit", "🚩", "Automated accounting, leverage, and governance risk checks")
+    red_flags = modules.get("red_flags", [])
+    if red_flags:
+        for flag in red_flags:
+            severity = flag.get("severity", "info")
+            cat = "danger" if severity == "danger" else "warning" if severity == "warning" else "info"
+            render_callout(f"**{flag.get('title', '')}**: {flag.get('finding', '')}\n\n*What it means:* {flag.get('explanation', '')}", label=f"FORENSIC CHECK: {severity.upper()}", category=cat)
     else:
-        st.markdown(f'<div class="report-callout">Business model details are being compiled for {company_name}.</div>', unsafe_allow_html=True)
-    
-    desc = profile.get("description", "")
-    if desc:
-        st.markdown(desc)
-    phase2_segments = raw_data.get("phase2_segments", [])
-    if phase2_segments:
-        st.markdown("**📊 Segmental Revenue Breakdown & Division Trajectory:**")
-        st.markdown(_render_html_table(["Business Segment / Division", "Revenue Share", "Growth Trajectory"], phase2_segments), unsafe_allow_html=True)
+        render_callout("No high-severity forensic red flags detected across profit quality, receivables, debt velocity, or promoter pledge.", label="FORENSIC STATUS", category="success")
 
-    # ── Section 5: Company History & Milestones ───────────────
-    render_section_header("5. Company History & Milestones", "⏳", "Historical milestones automatically extracted")
-    symbol_key = symbol.upper()
-    if symbol_key in STOCK_HISTORY_MAP:
-        history_data = STOCK_HISTORY_MAP[symbol_key]
-    else:
-        summary = info.get('longBusinessSummary', '')
-        if summary:
-            history_data = [{"Year": "Overview", "Milestone": summary[:150] + "...", "Why it matters": "Extracted from company summary"}]
-        else:
-            history_data = [{"Year": "Pending", "Milestone": "Historical milestone data is being compiled", "Why it matters": ""}]
-    st.markdown(_render_html_table(["Year", "Milestone", "Why it matters"], history_data), unsafe_allow_html=True)
-
-    # ── Section 6: Who Controls Company? ──────────────────────
-    render_section_header(f"6. Who Controls {company_name}?", "🏛️", "Ownership & shareholding pattern automatically parsed")
-    shareholding_rows, shareholding_interp = _generate_dynamic_shareholding(
-        info, symbol, company_name, sector_name, promoter_holding, institutional_holding, dossier.get("modules", {}).get("ctso", {})
-    )
-    st.markdown(_render_html_table(["Holder Category", "Holding %", "AI Observation"], shareholding_rows), unsafe_allow_html=True)
-    render_callout(shareholding_interp, label="SHAREHOLDING INTERPRETATION", category="info")
-
-    # ── Section 7: Earnings Quality & Operating Margins ───────
-    render_section_header("7. Earnings Quality & Operating Margins", "💵", f"Audited 3-Year Profitability Trajectory ({sector_name})")
+    # ── Section 5: Earnings Quality & Operating Margins ───────────────────────
+    render_section_header("5. Earnings Quality & Operating Margins", "💵", f"Audited 3-Year Profitability Trajectory ({sector_name})")
     inc_stmt = raw_data.get("financials", {}).get("display_income_statement", {})
     if inc_stmt and inc_stmt.get("data"):
         st.markdown("**Audited Financial Statement Highlights (P&L):**")
@@ -388,8 +353,8 @@ def render_simple_view(dossier: dict):
         label="WARNING ON HEADLINE PAT", category="warning"
     )
 
-    # ── Section 8: Solvency & Balance Sheet Strength ───────────
-    render_section_header("8. Solvency & Balance Sheet Strength", "🛡️", f"Asset Quality & Borrowing Framework ({sector_name})")
+    # ── Section 6: Solvency & Balance Sheet Strength ──────────────────────────
+    render_section_header("6. Solvency & Balance Sheet Strength", "🛡️", f"Asset Quality & Borrowing Framework ({sector_name})")
     bs_stmt = raw_data.get("financials", {}).get("display_balance_sheet", {})
     if bs_stmt and bs_stmt.get("data"):
         st.markdown("**Audited Balance Sheet Structure:**")
@@ -409,16 +374,14 @@ def render_simple_view(dossier: dict):
         label="BEGINNER EXPLANATION", category="success"
     )
 
-    # ── Section 9: Future Growth Pipeline & Capex ──────────────
-    render_section_header("9. Future Growth Pipeline & Capex", "🚀", f"Pipeline Framework for {sector_name}")
+    # ── Section 7: Future Growth Pipeline & Capex ──────────────────────────────
+    render_section_header("7. Future Growth Pipeline & Management Guidance", "🚀", f"Pipeline Framework for {sector_name}")
     pipeline_desc = "Sanctioned credit pipeline" if "Bank" in sector or "PNB" in symbol else "Order book / Capex pipeline" if "Capital" in sector or "LT" in symbol else "Drug pipeline / R&D approvals" if "Pharma" in sector else "New business pipeline"
     render_callout(
         f"IMPORTANT DISTINCTION: {pipeline_desc} represents potential future activity; actual future earnings depend on drawdowns, execution velocity, and economic conditions.",
         label="PIPELINE DISTINCTION", category="warning"
     )
 
-    # ── Section 10: Management Plans & Earnings Call Concalls ──
-    render_section_header("10. Management Plans & Earnings Call Concall Transcripts", "🎧", "Official analyst conference call filings & management guidance")
     outlook = dossier.get("modules", {}).get("future_outlook", {})
     if isinstance(outlook, dict):
         guidance_data = []
@@ -434,87 +397,9 @@ def render_simple_view(dossier: dict):
     else:
         guidance_data = [{"Theme": "Strategic Direction", "Management Indicator": str(outlook) if outlook else "Details being compiled.", "Status": "Management Guidance"}]
     st.markdown(_render_html_table(["Theme", "Management Indicator", "Status"], guidance_data), unsafe_allow_html=True)
-    concalls = modules.get("concall_transcripts", [])
-    if concalls:
-        st.markdown("**🎙️ Latest Earnings Call Concall Transcripts & Analyst Call Filings:**")
-        for item in concalls[:5]:
-            st.markdown(f"- **{item.get('date', '')}**: [{item.get('title', '')}]({item.get('url', '#')}) · <span class='badge badge-guidance'>{item.get('source', 'SEBI Filing')}</span>", unsafe_allow_html=True)
-    else:
-        st.markdown("*Quarterly concall transcripts are filed with NSE/BSE under SEBI LODR Regulations.*")
-    render_callout(
-        "CONCALL TRANSCRIPT SOURCE: Verbatim audio recordings and analyst call transcripts are mandated under SEBI Listing Regulations (LODR) to be filed with NSE & BSE within 24-48 hours of quarterly earnings calls.",
-        label="CONCALL FILING REGULATION", category="info"
-    )
 
-    # ── Section 11: What Should an Investor Monitor? ──────────
-    render_section_header("11. What Should an Investor Monitor?", "🔭", f"6 key variables for {sector_name}")
-    monitoring_points = modules.get("what_to_monitor", [
-        "Core Operating Margins: Monitor quarterly margin trajectory.",
-        "Revenue vs Expense Growth: Track operating leverage efficiency.",
-        "Headline Profit Quality: Compare net profit against operating cash flows.",
-        "Asset Quality & Borrowing: Monitor credit health and borrowing costs.",
-        "Segmental Growth Momentum: Evaluate performance across core operating divisions.",
-        "Capital Adequacy & Funding Cost: Track cost of funds and capital buffers."
-    ])
-    for i, p in enumerate(monitoring_points, 1):
-        st.markdown(f"**{i}.** {p}")
-
-    # ── Section 12: Historical Governance & Legal Context ──────
-    render_section_header("12. Historical Governance & Legal Context", "🏛️", "Legacy events & legal status")
-    render_callout(
-        "HISTORICAL GOVERNANCE EVENT: Material historical events or legal proceedings involving past management or legacy transactions should be evaluated objectively alongside subsequent legal rulings, management changes, and balance sheet provisions. [S9]",
-        label="GOVERNANCE CONTEXT", category="warning"
-    )
-
-    # ── Section 13: Dividend History ──────────────────────────
-    render_section_header("13. Dividend & Distribution History", "💰", "Historical shareholder returns")
-    divs = modules.get("dividends", [])
-    if divs:
-        st.dataframe(pd.DataFrame(divs), use_container_width=True)
-    else:
-        st.write("Dividend history recorded in primary exchange filings.")
-    render_callout(
-        "AI INTERPRETATION: Dividend payout sustainability should be evaluated alongside operating cash generation, capital requirements, and debt servicing.",
-        label="DIVIDEND ANALYSIS", category="info"
-    )
-
-    # ── Section 14: Physical + Digital Reach ──────────────────
-    render_section_header("14. Physical & Digital Distribution Reach", "🌐", "Operational infrastructure")
-    employees = info.get("fullTimeEmployees", "N/A")
-    country = info.get("country", "India")
-    website = info.get("website", "N/A")
-    market_cap_cr = info.get("marketCap", 0) / 1e7
-
-    reach_data = [
-        {"Dimension": "Operational Footprint", "Details": f"{country}-based operations" + (f" with {employees:,} employees" if isinstance(employees, int) else "")},
-        {"Dimension": "Digital Presence", "Details": website if website and website != "N/A" else "Not available"},
-        {"Dimension": "Market Position", "Details": f"{'Large-cap' if market_cap_cr > 20000 else 'Mid-cap' if market_cap_cr > 5000 else 'Small-cap'} enterprise in {info.get('industry', 'N/A')}"},
-    ]
-    st.markdown(_render_html_table(["Dimension", "Details"], reach_data), unsafe_allow_html=True)
-
-    # ── Section 15: Latest Important Developments ─────────────
-    render_section_header("15. Latest Material Developments", "📰", "Recent filings & news")
-    news = modules.get("news", [])
-    if news:
-        for item in news[:5]:
-            st.markdown(f"- **{item.get('date', '')}**: [{item.get('title', '')}]({item.get('url', '#')}) · <span class='badge badge-confirmed'>High Materiality</span>", unsafe_allow_html=True)
-    render_callout(
-        "FACT-CHECKING RULE: Primary exchange intimation filings outrank unconfirmed media reports. Media coverage is treated as secondary until confirmed by primary company disclosures.",
-        label="FACT-CHECKING RULE", category="info"
-    )
-
-    # ── Section 16: Upcoming Events (100% Automated Calendar) ───
-    render_section_header("16. Upcoming Investor Calendar Events", "📅", "Automated upcoming result & concall schedule")
-    events_data = [
-        {"Event": "Next Quarterly Financial Results", "Expected Timing": str(upcoming_earn), "App Treatment": "Official / Tentative exchange intimation"},
-        {"Event": "Earnings Call & Transcript Filing", "Expected Timing": f"Within 24-48 hours of {upcoming_earn}", "App Treatment": "Exchange intimation"},
-        {"Event": "Annual General Meeting (AGM)", "Expected Timing": "July / August 2026", "App Treatment": "Official exchange disclosure"},
-        {"Event": "Board Meeting for Capital / Operations", "Expected Timing": "Quarterly intimation schedule", "App Treatment": "Exchange intimation"},
-    ]
-    st.markdown(_render_html_table(["Event", "Expected Timing", "App Treatment"], events_data), unsafe_allow_html=True)
-
-    # ── Section 17 & 18: Catalysts vs Risks ───────────────────
-    render_section_header("17. What Could Strengthen vs Weaken the Story?", "⚖️", "Catalysts and risks")
+    # ── Section 8: Positive Catalysts vs Risk Factors (SWOT) ──────────────────
+    render_section_header("8. Positive Catalysts vs Risk Factors (SWOT)", "⚖️", "Catalysts and risks")
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("<h4 style='color: #059669;'>🟢 Positive Catalysts</h4>", unsafe_allow_html=True)
@@ -537,32 +422,8 @@ def render_simple_view(dossier: dict):
         else:
             st.info("Risk assessment is being generated.")
 
-    # ── Section 19: Forensic Audit & Red Flag Engine ───────────
-    render_section_header("19. Forensic Audit & Red Flag Engine", "🚩", "15-Point Code Audit Checks")
-    red_flags = modules.get("red_flags", [])
-    if red_flags:
-        for flag in red_flags:
-            severity = flag.get("severity", "info")
-            cat = "danger" if severity == "danger" else "warning" if severity == "warning" else "info"
-            render_callout(f"**{flag.get('title', '')}**: {flag.get('finding', '')}\n\n*What it means:* {flag.get('explanation', '')}", label=f"FORENSIC CHECK: {severity.upper()}", category=cat)
-    else:
-        render_callout("No high-severity forensic red flags detected across profit quality, receivables, debt velocity, or promoter pledge.", label="FORENSIC STATUS", category="success")
-
-    # ── Section 20: AI Investment Conclusion Matrix ───────────
-    render_section_header("20. AI Investment Research Conclusion Matrix", "📌", "SEBI-compliant decision support")
-    research_summary = dossier.get("modules", {}).get("research_summary", {})
-    if isinstance(research_summary, dict) and research_summary.get("dimensions"):
-        conclusion_data = [{"Dimension": d.get("dimension", ""), "Research Conclusion": d.get("assessment", "")} for d in research_summary["dimensions"]]
-    else:
-        conclusion_data = [{"Dimension": "Status", "Research Conclusion": "Analysis in progress"}]
-    st.markdown(_render_html_table(["Dimension", "Research Conclusion"], conclusion_data), unsafe_allow_html=True)
-    render_callout(
-        "DECISION-SUPPORT CONCLUSION: The evidence points to an improving operational trajectory, while margin recovery and cash conversion remain the central variables to monitor. This report intentionally does not issue a Buy/Sell call.",
-        label="DECISION-SUPPORT CONCLUSION", category="success"
-    )
-
-    # ── Section 21: Sector Peer Valuation Comparison ───────────
-    render_section_header("21. Sector Peer Valuation Comparison", "📊", f"Relative valuation matrix ({sector_name})")
+    # ── Section 9: Sector Peer Valuation Comparison ───────────────────────────
+    render_section_header("9. Sector Peer Valuation Comparison", "🔍", f"Relative valuation matrix ({sector_name})")
     pe_val = info.get("trailingPE", info.get("forwardPE", "N/A"))
     pb_val = info.get("priceToBook", "N/A")
     roe_val = info.get("returnOnEquity", "N/A")
@@ -580,7 +441,151 @@ def render_simple_view(dossier: dict):
     ]
     st.markdown(_render_html_table(["Metric", company_name, "Sector Median"], peer_matrix), unsafe_allow_html=True)
 
-    # ── Section 22: 'What Changed?' Change Log ────────────────
+    # ── Section 10: What Does Company Actually Do? (Business Model) ───────────
+    render_section_header(f"10. What Does {company_name} Actually Do?", "💼", "Core economic model")
+    comp_narrative = modules.get("company_profile_narrative", {})
+    if isinstance(comp_narrative, dict) and comp_narrative.get("business_model"):
+        st.markdown(f'<div class="report-callout">{comp_narrative["business_model"]}</div>', unsafe_allow_html=True)
+    elif info.get("longBusinessSummary"):
+        st.markdown(f'<div class="report-callout">{info["longBusinessSummary"]}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="report-callout">Business model details are being compiled for {company_name}.</div>', unsafe_allow_html=True)
+    
+    desc = profile.get("description", "")
+    if desc:
+        st.markdown(desc)
+    phase2_segments = raw_data.get("phase2_segments", [])
+    if phase2_segments:
+        st.markdown("**📊 Segmental Revenue Breakdown & Division Trajectory:**")
+        st.markdown(_render_html_table(["Business Segment / Division", "Revenue Share", "Growth Trajectory"], phase2_segments), unsafe_allow_html=True)
+
+    # ── Section 11: Who Controls Company? (Shareholding Pattern) ──────────────
+    render_section_header(f"11. Who Controls {company_name}?", "🏛️", "Ownership & shareholding pattern automatically parsed")
+    shareholding_rows, shareholding_interp = _generate_dynamic_shareholding(
+        info, symbol, company_name, sector_name, promoter_holding, institutional_holding, dossier.get("modules", {}).get("ctso", {})
+    )
+    st.markdown(_render_html_table(["Holder Category", "Holding %", "AI Observation"], shareholding_rows), unsafe_allow_html=True)
+    render_callout(shareholding_interp, label="SHAREHOLDING INTERPRETATION", category="info")
+
+    # ── Section 12: AI Investment Conclusion Matrix ───────────────────────────
+    render_section_header("12. AI Investment Research Conclusion Matrix", "📌", "SEBI-compliant decision support")
+    research_summary = dossier.get("modules", {}).get("research_summary", {})
+    if isinstance(research_summary, dict) and research_summary.get("dimensions"):
+        conclusion_data = [{"Dimension": d.get("dimension", ""), "Research Conclusion": d.get("assessment", "")} for d in research_summary["dimensions"]]
+    else:
+        conclusion_data = [{"Dimension": "Status", "Research Conclusion": "Analysis in progress"}]
+    st.markdown(_render_html_table(["Dimension", "Research Conclusion"], conclusion_data), unsafe_allow_html=True)
+    render_callout(
+        "DECISION-SUPPORT CONCLUSION: The evidence points to an improving operational trajectory, while margin recovery and cash conversion remain the central variables to monitor. This report intentionally does not issue a Buy/Sell call.",
+        label="DECISION-SUPPORT CONCLUSION", category="success"
+    )
+
+    # ── Section 13: Dividend History & Capital Returns ────────────────────────
+    render_section_header("13. Dividend & Distribution History", "💰", "Historical shareholder returns")
+    divs = modules.get("dividends", [])
+    if divs:
+        st.dataframe(pd.DataFrame(divs), use_container_width=True)
+    else:
+        st.write("Dividend history recorded in primary exchange filings.")
+    render_callout(
+        "AI INTERPRETATION: Dividend payout sustainability should be evaluated alongside operating cash generation, capital requirements, and debt servicing.",
+        label="DIVIDEND ANALYSIS", category="info"
+    )
+
+    # ── Section 14: Key Questions Every Investor Must Answer ──────────────────
+    render_section_header("14. Key Questions Every Investor Must Answer", "❓", "Critical decision-support questions before investing")
+    questions = modules.get("investor_questions", [
+        "Is the company able to grow revenue faster than its operating expenses?",
+        "How stable are the operating margins across key economic cycles?",
+        "Does the company generate sufficient cash from operations relative to reported net profit?",
+        "Is debt or financial leverage maintained at safe, comfortable levels?",
+        "Are management's growth targets backed by strong execution and market demand?"
+    ])
+    render_investor_questions(questions)
+
+    # ── Section 15: What to Monitor Next Quarter ──────────────────────────────
+    render_section_header("15. What Should an Investor Monitor?", "🔭", f"Key variables for {sector_name}")
+    monitoring_points = modules.get("what_to_monitor", [
+        "Core Operating Margins: Monitor quarterly margin trajectory.",
+        "Revenue vs Expense Growth: Track operating leverage efficiency.",
+        "Headline Profit Quality: Compare net profit against operating cash flows.",
+        "Asset Quality & Borrowing: Monitor credit health and borrowing costs.",
+        "Segmental Growth Momentum: Evaluate performance across core operating divisions.",
+        "Capital Adequacy & Funding Cost: Track cost of funds and capital buffers."
+    ])
+    for i, p in enumerate(monitoring_points, 1):
+        st.markdown(f"**{i}.** {p}")
+
+    # ── Section 16: Distribution Reach & Operational Scale ───────────────────
+    render_section_header("16. Physical & Digital Distribution Reach", "🌐", "Operational infrastructure")
+    employees = info.get("fullTimeEmployees", "N/A")
+    country = info.get("country", "India")
+    website = info.get("website", "N/A")
+    market_cap_cr = info.get("marketCap", 0) / 1e7
+
+    reach_data = [
+        {"Dimension": "Operational Footprint", "Details": f"{country}-based operations" + (f" with {employees:,} employees" if isinstance(employees, int) else "")},
+        {"Dimension": "Digital Presence", "Details": website if website and website != "N/A" else "Not available"},
+        {"Dimension": "Market Position", "Details": f"{'Large-cap' if market_cap_cr > 20000 else 'Mid-cap' if market_cap_cr > 5000 else 'Small-cap'} enterprise in {info.get('industry', 'N/A')}"},
+    ]
+    st.markdown(_render_html_table(["Dimension", "Details"], reach_data), unsafe_allow_html=True)
+
+    # ── Section 17: Recent News & Material Sentiment ─────────────────────────
+    render_section_header("17. Latest Material Developments", "📰", "Recent filings & news")
+    news = modules.get("news", [])
+    if news:
+        for item in news[:5]:
+            st.markdown(f"- **{item.get('date', '')}**: [{item.get('title', '')}]({item.get('url', '#')}) · <span class='badge badge-confirmed'>High Materiality</span>", unsafe_allow_html=True)
+    render_callout(
+        "FACT-CHECKING RULE: Primary exchange intimation filings outrank unconfirmed media reports. Media coverage is treated as secondary until confirmed by primary company disclosures.",
+        label="FACT-CHECKING RULE", category="info"
+    )
+
+    # ── Section 18: Upcoming Investor Calendar Events ─────────────────────────
+    render_section_header("18. Upcoming Investor Calendar Events", "📅", "Automated upcoming result & concall schedule")
+    events_data = [
+        {"Event": "Next Quarterly Financial Results", "Expected Timing": str(upcoming_earn), "App Treatment": "Official / Tentative exchange intimation"},
+        {"Event": "Earnings Call & Transcript Filing", "Expected Timing": f"Within 24-48 hours of {upcoming_earn}", "App Treatment": "Exchange intimation"},
+        {"Event": "Annual General Meeting (AGM)", "Expected Timing": "July / August 2026", "App Treatment": "Official exchange disclosure"},
+        {"Event": "Board Meeting for Capital / Operations", "Expected Timing": "Quarterly intimation schedule", "App Treatment": "Exchange intimation"},
+    ]
+    st.markdown(_render_html_table(["Event", "Expected Timing", "App Treatment"], events_data), unsafe_allow_html=True)
+
+    # ── Section 19: Company History & Historical Milestones ───────────────────
+    render_section_header("19. Company History & Milestones", "⏳", "Historical milestones automatically extracted")
+    symbol_key = symbol.upper()
+    if symbol_key in STOCK_HISTORY_MAP:
+        history_data = STOCK_HISTORY_MAP[symbol_key]
+    else:
+        summary = info.get('longBusinessSummary', '')
+        if summary:
+            history_data = [{"Year": "Overview", "Milestone": summary[:150] + "...", "Why it matters": "Extracted from company summary"}]
+        else:
+            history_data = [{"Year": "Pending", "Milestone": "Historical milestone data is being compiled", "Why it matters": ""}]
+    st.markdown(_render_html_table(["Year", "Milestone", "Why it matters"], history_data), unsafe_allow_html=True)
+
+    # ── Section 20: Governance & Legal Context ────────────────────────────────
+    render_section_header("20. Governance & Legal Context", "🏛️", "Legacy events & legal status")
+    render_callout(
+        "HISTORICAL GOVERNANCE EVENT: Material historical events or legal proceedings involving past management or legacy transactions should be evaluated objectively alongside subsequent legal rulings, management changes, and balance sheet provisions. [S9]",
+        label="GOVERNANCE CONTEXT", category="warning"
+    )
+
+    # ── Section 21: Concall Transcripts & Primary Disclosures ─────────────────
+    render_section_header("21. Concall Transcripts & Primary Disclosures", "🎧", "Official analyst conference call filings & management guidance")
+    concalls = modules.get("concall_transcripts", [])
+    if concalls:
+        st.markdown("**🎙️ Latest Earnings Call Concall Transcripts & Analyst Call Filings:**")
+        for item in concalls[:5]:
+            st.markdown(f"- **{item.get('date', '')}**: [{item.get('title', '')}]({item.get('url', '#')}) · <span class='badge badge-guidance'>{item.get('source', 'SEBI Filing')}</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("*Quarterly concall transcripts are filed with NSE/BSE under SEBI LODR Regulations.*")
+    render_callout(
+        "CONCALL TRANSCRIPT SOURCE: Verbatim audio recordings and analyst call transcripts are mandated under SEBI Listing Regulations (LODR) to be filed with NSE & BSE within 24-48 hours of quarterly earnings calls.",
+        label="CONCALL FILING REGULATION", category="info"
+    )
+
+    # ── Section 22: 'What Changed?' Change Log ────────────────────────────────
     render_section_header("22. 'What Changed?' Change Log", "🔄", "Tracking updates over time")
     changelog = [
         {"Change": "New Financial Results Filed", "Why it Matters": "Updates profitability, margins, and operational metrics"},
@@ -589,7 +594,7 @@ def render_simple_view(dossier: dict):
     ]
     st.markdown(_render_html_table(["Change", "Why it Matters"], changelog), unsafe_allow_html=True)
 
-    # ── Section 23 & 24 & 25 & 26: Evidence Room & Disclosures ──
+    # ── Section 23 & 24 & 25 & 26: Evidence Room & Disclosures ────────────────
     source_tracking = modules.get("source_tracking", {})
     render_evidence_room(source_tracking)
 
