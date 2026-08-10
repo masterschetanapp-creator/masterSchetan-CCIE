@@ -29,6 +29,47 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.02em;
 }
 
+/* Streamlit Radio & View Toggle Overrides (Pure White Theme) */
+div[role="radiogroup"] {
+    background-color: #ffffff !important;
+    padding: 0.6rem 1rem !important;
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03) !important;
+}
+
+div[role="radiogroup"] label, div[role="radiogroup"] label p, div[role="radiogroup"] span {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-weight: 600 !important;
+}
+
+/* Streamlit Tabs Overrides (Pure White Theme) */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: #ffffff !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    border-radius: 8px 8px 0 0 !important;
+    padding: 0.25rem 0.5rem 0 0.5rem !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-weight: 600 !important;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #ffffff !important;
+    color: #2563eb !important;
+    border-bottom-color: #2563eb !important;
+    font-weight: 700 !important;
+}
+
+.stTabs [data-baseweb="tab-panel"] {
+    background-color: #ffffff !important;
+    padding-top: 1rem !important;
+}
+
 h1 { font-size: 2.2rem !important; color: #0f172a !important; }
 h2 { font-size: 1.6rem !important; border-bottom: 2px solid #2563eb; padding-bottom: 0.4rem; margin-top: 1.8rem !important; color: #0f172a !important; }
 h3 { font-size: 1.3rem !important; color: #1d4ed8 !important; }
