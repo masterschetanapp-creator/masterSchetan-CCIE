@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 try:
     import streamlit as st
     def get_secret(key_name):
-        return st.secrets.get(key_name, os.getenv(key_name, ""))
+        try:
+            return st.secrets.get(key_name, os.getenv(key_name, ""))
+        except Exception:
+            return os.getenv(key_name, "")
 except Exception:
     def get_secret(key_name):
         return os.getenv(key_name, "")
