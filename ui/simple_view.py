@@ -50,7 +50,7 @@ STOCK_HISTORY_MAP = {
 }
 
 
-def _generate_dynamic_shareholding(info: dict, symbol: str, company_name: str, sector_name: str, promoter_holding: str, institutional_holding: str):
+def _generate_dynamic_shareholding(info: dict, symbol: str, company_name: str, sector_name: str, promoter_holding: str, institutional_holding: str, ctso: dict = None):
     """Generate detailed 5-row shareholding breakdown & tailored AI governance interpretation for ANY stock."""
     sym_upper = symbol.upper()
     
@@ -112,7 +112,9 @@ def _generate_dynamic_shareholding(info: dict, symbol: str, company_name: str, s
         {"Holder Category": "Promoter Pledge", "Holding %": "0%", "AI Observation": "No promoter pledge reported"}
     ]
 
-    if p_val < 5.0:
+    if ctso and ctso.get("golden_thread"):
+        interpretation = f"AI INTERPRETATION: {company_name}'s shareholding structure ({'Government-controlled' if p_val > 50 else 'Promoter-led' if p_val > 30 else 'Professionally managed'}). {ctso['golden_thread']}"
+    elif p_val < 5.0:
         interpretation = (
             f"AI INTERPRETATION: {company_name} is a professionally managed institution with low promoter concentration ({p_val:.2f}%). "
             f"Institutional investors control {i_val:.2f}% of equity, providing strong market oversight, independent board governance, "
@@ -200,6 +202,19 @@ def render_simple_view(dossier: dict):
         label="SOURCE NOTE", category="info"
     )
 
+    # ── Display Central Investment Thesis ─────────────────────
+    ctso = dossier["modules"].get("ctso", {})
+    if ctso.get("golden_thread"):
+        archetype = ctso.get("archetype", "").replace("_", " ").title()
+        conviction = ctso.get("conviction_level", "")
+        st.markdown(f'''
+        <div class="report-callout" style="border-left-color: #2563eb;">
+            <span class="callout-label" style="color: #2563eb;">🎯 CENTRAL INVESTMENT THESIS — {archetype}</span>
+            <span class="badge badge-{'confirmed' if conviction == 'HIGH' else 'guidance' if conviction == 'MEDIUM' else 'estimate'}" style="float: right;">{conviction} CONVICTION</span>
+            <p style="font-size: 1.05rem; line-height: 1.7; margin-top: 0.5rem;">{ctso['golden_thread']}</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
     # ── Section 2: Understand Company in 30 Seconds ───────────
     render_section_header(f"2. Understand {company_name} in 30 Seconds", "⚡", f"Executive snapshot tailored for {sector_name}")
     exec_summary = modules.get("executive_summary")
@@ -252,24 +267,30 @@ def render_simple_view(dossier: dict):
 
     # ── Section 3: Research Snapshot ──────────────────────────
     render_section_header("3. Research Snapshot", "📊", f"High-level diagnostic matrix ({sector_name})")
+    snapshot = dossier.get("modules", {}).get("research_snapshot", {})
     snapshot_matrix = [
-        {"Area": "Business Scale", "Current Observation": "Very Large", "What it means": f"Large nationwide franchise in {sector_name}"},
-        {"Area": "Revenue Momentum", "Current Observation": "Healthy", "What it means": "Steady topline growth across core business lines"},
-        {"Area": "Asset Quality / Solvency", "Current Observation": "Improving", "What it means": "Stable balance sheet & provisions"},
-        {"Area": "Capital Position", "Current Observation": "Comfortable", "What it means": "Capital adequacy comfortably above minimum regulatory requirements"},
-        {"Area": "Profitability", "Current Observation": "Improving", "What it means": "Return on equity and operating margins expanding"},
-        {"Area": "Promoter Pledge", "Current Observation": "Nil (0%)", "What it means": "Zero encumbrance on promoter shareholding"},
+        {"Area": "Business Scale", "Observation": snapshot.get("business_scale", "N/A")},
+        {"Area": "Revenue Momentum", "Observation": snapshot.get("revenue_momentum", "N/A")},
+        {"Area": "Solvency Position", "Observation": snapshot.get("solvency_position", "N/A")},
+        {"Area": "Capital Adequacy", "Observation": snapshot.get("capital_adequacy", "N/A")},
+        {"Area": "Earnings Quality", "Observation": snapshot.get("earnings_quality", "N/A")},
+        {"Area": "Governance Flags", "Observation": snapshot.get("governance_flags", "N/A")},
     ]
-    st.markdown(_render_html_table(["Area", "Current Observation", "What it means"], snapshot_matrix), unsafe_allow_html=True)
+    st.markdown(_render_html_table(["Area", "Observation"], snapshot_matrix), unsafe_allow_html=True)
 
     # ── Section 4: What Does Company Actually Do? ─────────────
     render_section_header(f"4. What Does {company_name} Actually Do?", "💼", "Core economic model")
-    desc = profile.get("description", f"{company_name} operates across core divisions in the {sector_name} sector.")
-    render_callout(
-        f"Simple explanation: {company_name} is a leading enterprise in the {sector_name} sector. Its basic economic model is to provide specialized products/services, earn revenue from core operations, and generate sustainable returns on capital.",
-        label="BUSINESS MODEL", category="info"
-    )
-    st.markdown(desc)
+    comp_narrative = modules.get("company_profile_narrative", {})
+    if isinstance(comp_narrative, dict) and comp_narrative.get("business_model"):
+        st.markdown(f'<div class="report-callout">{comp_narrative["business_model"]}</div>', unsafe_allow_html=True)
+    elif info.get("longBusinessSummary"):
+        st.markdown(f'<div class="report-callout">{info["longBusinessSummary"]}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="report-callout">Business model details are being compiled for {company_name}.</div>', unsafe_allow_html=True)
+    
+    desc = profile.get("description", "")
+    if desc:
+        st.markdown(desc)
     phase2_segments = raw_data.get("phase2_segments", [])
     if phase2_segments:
         st.markdown("**📊 Segmental Revenue Breakdown & Division Trajectory:**")
@@ -281,20 +302,17 @@ def render_simple_view(dossier: dict):
     if symbol_key in STOCK_HISTORY_MAP:
         history_data = STOCK_HISTORY_MAP[symbol_key]
     else:
-        year_found = str(founding_yr) if len(str(founding_yr)) == 4 else "1995"
-        year_list = str(listing_dt[:4]) if len(str(listing_dt)) >= 4 and listing_dt[:4].isdigit() else "2005"
-        history_data = [
-            {"Year": year_found, "Milestone": f"{company_name} incorporated", "Why it matters": "Foundational establishment and operational launch"},
-            {"Year": year_list, "Milestone": f"Stock Market Listing on NSE/BSE ({listing_dt})", "Why it matters": "Public equity capital listing and exchange transparency"},
-            {"Year": "2015", "Milestone": "Nationwide business expansion & scale-up", "Why it matters": "Footprint expansion across primary domestic markets"},
-            {"Year": "2023", "Milestone": "Digital transformation & balance sheet optimization", "Why it matters": "Modernized operations and enhanced capital efficiency"}
-        ]
+        summary = info.get('longBusinessSummary', '')
+        if summary:
+            history_data = [{"Year": "Overview", "Milestone": summary[:150] + "...", "Why it matters": "Extracted from company summary"}]
+        else:
+            history_data = [{"Year": "Pending", "Milestone": "Historical milestone data is being compiled", "Why it matters": ""}]
     st.markdown(_render_html_table(["Year", "Milestone", "Why it matters"], history_data), unsafe_allow_html=True)
 
     # ── Section 6: Who Controls Company? ──────────────────────
     render_section_header(f"6. Who Controls {company_name}?", "🏛️", "Ownership & shareholding pattern automatically parsed")
     shareholding_rows, shareholding_interp = _generate_dynamic_shareholding(
-        info, symbol, company_name, sector_name, promoter_holding, institutional_holding
+        info, symbol, company_name, sector_name, promoter_holding, institutional_holding, dossier.get("modules", {}).get("ctso", {})
     )
     st.markdown(_render_html_table(["Holder Category", "Holding %", "AI Observation"], shareholding_rows), unsafe_allow_html=True)
     render_callout(shareholding_interp, label="SHAREHOLDING INTERPRETATION", category="info")
@@ -341,11 +359,20 @@ def render_simple_view(dossier: dict):
 
     # ── Section 10: Management Plans & Earnings Call Concalls ──
     render_section_header("10. Management Plans & Earnings Call Concall Transcripts", "🎧", "Official analyst conference call filings & management guidance")
-    guidance_data = [
-        {"Theme": "Growth Guidance", "Management Indicator": "Targeting double-digit operational expansion", "Status": "Management Guidance - Not Guaranteed"},
-        {"Theme": "Margin Target", "Management Indicator": "Focusing on margin expansion & cost control", "Status": "Planned Strategy"},
-        {"Theme": "Digital Reach", "Management Indicator": "Expanding digital customer onboarding journeys", "Status": "Ongoing Implementation"},
-    ]
+    outlook = dossier.get("modules", {}).get("future_outlook", {})
+    if isinstance(outlook, dict):
+        guidance_data = []
+        if outlook.get("short_term"):
+            guidance_data.append({"Theme": "Short-Term Focus", "Management Indicator": str(outlook["short_term"]), "Status": "Management Guidance"})
+        if outlook.get("long_term"):
+            guidance_data.append({"Theme": "Long-Term Strategy", "Management Indicator": str(outlook["long_term"]), "Status": "Management Guidance"})
+        if outlook.get("key_catalysts"):
+            for i, cat in enumerate(outlook["key_catalysts"][:3]):
+                guidance_data.append({"Theme": f"Catalyst {i+1}", "Management Indicator": str(cat), "Status": "Planned"})
+        if not guidance_data:
+            guidance_data = [{"Theme": "Strategic Direction", "Management Indicator": "Details being compiled from latest disclosures.", "Status": "Pending"}]
+    else:
+        guidance_data = [{"Theme": "Strategic Direction", "Management Indicator": str(outlook) if outlook else "Details being compiled.", "Status": "Management Guidance"}]
     st.markdown(_render_html_table(["Theme", "Management Indicator", "Status"], guidance_data), unsafe_allow_html=True)
     concalls = modules.get("concall_transcripts", [])
     if concalls:
@@ -393,12 +420,17 @@ def render_simple_view(dossier: dict):
 
     # ── Section 14: Physical + Digital Reach ──────────────────
     render_section_header("14. Physical & Digital Distribution Reach", "🌐", "Operational infrastructure")
+    employees = info.get("fullTimeEmployees", "N/A")
+    country = info.get("country", "India")
+    website = info.get("website", "N/A")
+    market_cap_cr = info.get("marketCap", 0) / 1e7
+
     reach_data = [
-        {"Distribution / Digital Metric": "Domestic Branch Network / Touchpoints", "Snapshot": "Nationwide network"},
-        {"Distribution / Digital Metric": "Digital Mobile Banking / Online Users", "Snapshot": "Multi-crore active users"},
-        {"Distribution / Digital Metric": "Automated Service Channels", "Snapshot": "Rapid adoption"},
+        {"Dimension": "Operational Footprint", "Details": f"{country}-based operations" + (f" with {employees:,} employees" if isinstance(employees, int) else "")},
+        {"Dimension": "Digital Presence", "Details": website if website and website != "N/A" else "Not available"},
+        {"Dimension": "Market Position", "Details": f"{'Large-cap' if market_cap_cr > 20000 else 'Mid-cap' if market_cap_cr > 5000 else 'Small-cap'} enterprise in {info.get('industry', 'N/A')}"},
     ]
-    st.markdown(_render_html_table(["Distribution / Digital Metric", "Snapshot"], reach_data), unsafe_allow_html=True)
+    st.markdown(_render_html_table(["Dimension", "Details"], reach_data), unsafe_allow_html=True)
 
     # ── Section 15: Latest Important Developments ─────────────
     render_section_header("15. Latest Material Developments", "📰", "Recent filings & news")
@@ -426,20 +458,24 @@ def render_simple_view(dossier: dict):
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("<h4 style='color: #059669;'>🟢 Positive Catalysts</h4>", unsafe_allow_html=True)
-        st.markdown("""
-        - Accelerated core revenue growth exceeding guidance
-        - Sustainable margin expansion across key operating divisions
-        - Further reduction in non-performing debt or provisions
-        - Strong operating cash flow conversion
-        """)
+        swot = dossier.get("modules", {}).get("strengths_weaknesses", {})
+        if isinstance(swot, dict) and swot.get("strengths"):
+            for s in swot["strengths"]:
+                st.markdown(f"✅ {s}")
+        else:
+            st.info("Positive catalyst analysis is being generated.")
     with col2:
         st.markdown("<h4 style='color: #dc2626;'>🔴 Risk Factors</h4>", unsafe_allow_html=True)
-        st.markdown("""
-        - Rising cost of funds or inflation squeezing margins
-        - Macroeconomic slowdown impacting demand or collections
-        - Increased capital expenditure burden
-        - Regulatory or sector policy changes
-        """)
+        risk_assessment = dossier.get("modules", {}).get("risk_assessment", {})
+        if isinstance(risk_assessment, dict):
+            for risk_type in ["operational", "financial", "market", "regulatory"]:
+                risks = risk_assessment.get(risk_type, [])
+                if risks:
+                    st.markdown(f"**{risk_type.title()} Risks:**")
+                    for r in risks:
+                        st.markdown(f"⚠️ {r}")
+        else:
+            st.info("Risk assessment is being generated.")
 
     # ── Section 19: Forensic Audit & Red Flag Engine ───────────
     render_section_header("19. Forensic Audit & Red Flag Engine", "🚩", "15-Point Code Audit Checks")
@@ -454,14 +490,11 @@ def render_simple_view(dossier: dict):
 
     # ── Section 20: AI Investment Conclusion Matrix ───────────
     render_section_header("20. AI Investment Research Conclusion Matrix", "📌", "SEBI-compliant decision support")
-    conclusion_data = [
-        {"Dimension": "Business Direction", "Research Conclusion": "Improving"},
-        {"Dimension": "Solvency & Balance Sheet", "Research Conclusion": "Stable"},
-        {"Dimension": "Revenue Momentum", "Research Conclusion": "Healthy"},
-        {"Dimension": "Capital Position", "Research Conclusion": "Comfortable"},
-        {"Dimension": "Profitability", "Research Conclusion": "Improving"},
-        {"Dimension": "Next 2-4 Quarter Watchlist", "Research Conclusion": "Margins, cash generation, borrowing costs, cost of capital"},
-    ]
+    research_summary = dossier.get("modules", {}).get("research_summary", {})
+    if isinstance(research_summary, dict) and research_summary.get("dimensions"):
+        conclusion_data = [{"Dimension": d.get("dimension", ""), "Research Conclusion": d.get("assessment", "")} for d in research_summary["dimensions"]]
+    else:
+        conclusion_data = [{"Dimension": "Status", "Research Conclusion": "Analysis in progress"}]
     st.markdown(_render_html_table(["Dimension", "Research Conclusion"], conclusion_data), unsafe_allow_html=True)
     render_callout(
         "DECISION-SUPPORT CONCLUSION: The evidence points to an improving operational trajectory, while margin recovery and cash conversion remain the central variables to monitor. This report intentionally does not issue a Buy/Sell call.",
@@ -470,14 +503,22 @@ def render_simple_view(dossier: dict):
 
     # ── Section 21: Sector Peer Valuation Comparison ───────────
     render_section_header("21. Sector Peer Valuation Comparison", "📊", f"Relative valuation matrix ({sector_name})")
-    pe_val = f"{info.get('trailingPE'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "N/A"
-    pb_val = f"{info.get('priceToBook'):.2f}" if isinstance(info.get('priceToBook'), (int, float)) else "N/A"
-    roe_val = f"{info.get('returnOnEquity')*100:.2f}%" if isinstance(info.get('returnOnEquity'), (int, float)) else "N/A"
+    pe_val = info.get("trailingPE", info.get("forwardPE", "N/A"))
+    pb_val = info.get("priceToBook", "N/A")
+    roe_val = info.get("returnOnEquity", "N/A")
+    if isinstance(roe_val, (int, float)):
+        roe_val = f"{roe_val * 100:.1f}%"
+    if isinstance(pe_val, (int, float)):
+        pe_val = f"{pe_val:.1f}x"
+    if isinstance(pb_val, (int, float)):
+        pb_val = f"{pb_val:.1f}x"
+
     peer_matrix = [
-        {"Company": f"**{company_name}** ({symbol})", "P/E Ratio": pe_val, "P/B Ratio": pb_val, "Return on Equity (ROE)": roe_val, "Valuation Metric": "Subject Company"},
-        {"Company": f"Industry Peer Average ({sector_name})", "P/E Ratio": "22.50x", "P/B Ratio": "2.80x", "Return on Equity (ROE)": "14.50%", "Valuation Metric": "Sector Benchmark"},
+        {"Metric": "P/E Ratio", company_name: str(pe_val), "Sector Median": "Sector-specific"},
+        {"Metric": "Price/Book", company_name: str(pb_val), "Sector Median": "Sector-specific"},
+        {"Metric": "Return on Equity", company_name: str(roe_val), "Sector Median": "Sector-specific"},
     ]
-    st.markdown(_render_html_table(["Company", "P/E Ratio", "P/B Ratio", "Return on Equity (ROE)", "Valuation Metric"], peer_matrix), unsafe_allow_html=True)
+    st.markdown(_render_html_table(["Metric", company_name, "Sector Median"], peer_matrix), unsafe_allow_html=True)
 
     # ── Section 22: 'What Changed?' Change Log ────────────────
     render_section_header("22. 'What Changed?' Change Log", "🔄", "Tracking updates over time")

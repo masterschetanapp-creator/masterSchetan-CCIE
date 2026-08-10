@@ -170,35 +170,63 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     sector_template = get_sector_template(sector)
     dossier["modules"]["sector_template"] = sector_template
 
+    # ── Step 10.5: Generate Central Thesis (CTSO) ─────────────
+    update_progress("Synthesizing central investment thesis...", 62)
+    try:
+        from ai.thesis_synthesizer import generate_ctso
+        ctso = generate_ctso(stock_data, computed_metrics, red_flags, sector_template, news)
+        dossier["modules"]["ctso"] = ctso
+    except Exception as e:
+        dossier["errors"].append(f"CTSO generation error: {str(e)}")
+        ctso = {}
+        dossier["modules"]["ctso"] = ctso
+        traceback.print_exc()
+
+    # ── Step 10.6: Compute dynamic Research Snapshot ──────────
+    update_progress("Computing research diagnostic snapshot...", 63)
+    try:
+        research_snapshot = _compute_research_snapshot(computed_metrics, red_flags, info)
+        dossier["modules"]["research_snapshot"] = research_snapshot
+    except Exception as e:
+        dossier["errors"].append(f"Research snapshot error: {str(e)}")
+        dossier["modules"]["research_snapshot"] = {}
+
     # ── Step 11: AI-powered analysis (Gemini) ─────────────────
     update_progress("AI is analyzing the company (this takes a moment)...", 65)
     try:
         gemini = GeminiClient()
         agents = ResearchAgents(gemini)
 
+        # Inject CTSO context into stock data for all agent calls
+        if ctso:
+            stock_data_with_ctso = dict(stock_data)
+            stock_data_with_ctso["_ctso"] = ctso
+        else:
+            stock_data_with_ctso = stock_data
+
         # Generate executive summary
         update_progress("Writing executive summary...", 70)
-        exec_summary = agents.generate_executive_summary(stock_data, computed_metrics, red_flags)
+        exec_summary = agents.generate_executive_summary(stock_data_with_ctso, computed_metrics, red_flags)
         dossier["modules"]["executive_summary"] = exec_summary
 
         # Generate company profile narrative
         update_progress("Building company profile...", 75)
-        company_profile = agents.generate_company_profile(stock_data)
+        company_profile = agents.generate_company_profile(stock_data_with_ctso)
         dossier["modules"]["company_profile_narrative"] = company_profile
 
         # Generate strengths & weaknesses
         update_progress("Identifying strengths & weaknesses...", 78)
-        swot = agents.generate_strengths_weaknesses(stock_data, computed_metrics, red_flags)
+        swot = agents.generate_strengths_weaknesses(stock_data_with_ctso, computed_metrics, red_flags)
         dossier["modules"]["strengths_weaknesses"] = swot
 
         # Generate risk assessment
         update_progress("Assessing risks...", 80)
-        risks = agents.generate_risk_assessment(stock_data, computed_metrics)
+        risks = agents.generate_risk_assessment(stock_data_with_ctso, computed_metrics)
         dossier["modules"]["risk_assessment"] = risks
 
         # Generate future outlook
         update_progress("Analyzing future outlook...", 83)
-        outlook = agents.generate_future_outlook(stock_data, news)
+        outlook = agents.generate_future_outlook(stock_data_with_ctso, news)
         dossier["modules"]["future_outlook"] = outlook
 
         # Generate simple explanations for all metrics
@@ -208,21 +236,21 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
 
         # Generate investor questions (not BUY/SELL)
         update_progress("Preparing investor decision questions...", 89)
-        questions = agents.generate_investor_questions(stock_data, computed_metrics, red_flags)
+        questions = agents.generate_investor_questions(stock_data_with_ctso, computed_metrics, red_flags)
         dossier["modules"]["investor_questions"] = questions
 
         # Generate what to monitor
         update_progress("Identifying what to watch...", 91)
-        monitor = agents.generate_what_to_monitor(stock_data, computed_metrics)
+        monitor = agents.generate_what_to_monitor(stock_data_with_ctso, computed_metrics)
         dossier["modules"]["what_to_monitor"] = monitor
 
         # Track AI sources
         source_tracker.add_claim(
             claim="AI analysis generated",
             value="complete",
-            source="Google Gemini 2.0 Flash",
-            source_type="AI-generated analysis",
-            confidence=75,
+            source="Multi-Model AI (Gemini 2.5 Flash + Groq + OpenRouter)",
+            source_type="AI-generated analysis with Central Thesis coherence",
+            confidence=80,
             module="ai_analysis"
         )
 
@@ -339,3 +367,105 @@ def _identify_key_catalyst(growth: dict, stock_data: dict) -> str:
     elif revenue_growth and revenue_growth > 10:
         return "Steady growth trajectory"
     return "Monitor for catalysts"
+
+
+def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict) -> dict:
+    """Compute the Research Snapshot diagnostic matrix from actual data."""
+    market_cap = info.get("marketCap", 0)
+    
+    # Business Scale
+    cap_cr = market_cap / 1e7
+    if cap_cr >= 100000:
+        business_scale = "Mega Cap"
+    elif cap_cr >= 20000:
+        business_scale = "Large Cap"
+    elif cap_cr >= 5000:
+        business_scale = "Mid Cap"
+    elif cap_cr >= 1000:
+        business_scale = "Small Cap"
+    else:
+        business_scale = "Micro Cap"
+    
+    # Revenue Momentum
+    growth = metrics.get("growth", {})
+    rev_1y = growth.get("revenue_cagr_1y", {}).get("value") if isinstance(growth.get("revenue_cagr_1y"), dict) else None
+    if rev_1y is None:
+        revenue_momentum = "Data Unavailable"
+    elif rev_1y > 20:
+        revenue_momentum = "Accelerating"
+    elif rev_1y > 10:
+        revenue_momentum = "Growing"
+    elif rev_1y > 0:
+        revenue_momentum = "Stable"
+    elif rev_1y > -5:
+        revenue_momentum = "Stagnating"
+    else:
+        revenue_momentum = "Declining"
+    
+    # Solvency Position
+    debt = metrics.get("debt_metrics", {})
+    de = debt.get("debt_to_equity", {}).get("value") if isinstance(debt.get("debt_to_equity"), dict) else None
+    icr = debt.get("interest_coverage", {}).get("value") if isinstance(debt.get("interest_coverage"), dict) else None
+    if de is None:
+        solvency = "Data Unavailable"
+    elif de < 0.3 and (icr is None or icr > 5):
+        solvency = "Fortress"
+    elif de < 0.8:
+        solvency = "Comfortable"
+    elif de < 1.5:
+        solvency = "Adequate"
+    elif de < 2.5:
+        solvency = "Stretched"
+    else:
+        solvency = "Distressed"
+    
+    # Capital Adequacy (based on ROE/ROCE)
+    prof = metrics.get("profitability", {})
+    roe = prof.get("roe", {}).get("value") if isinstance(prof.get("roe"), dict) else None
+    if roe is None:
+        capital_adequacy = "Data Unavailable"
+    elif roe > 20:
+        capital_adequacy = "Excellent"
+    elif roe > 15:
+        capital_adequacy = "Strong"
+    elif roe > 10:
+        capital_adequacy = "Adequate"
+    elif roe > 5:
+        capital_adequacy = "Tight"
+    else:
+        capital_adequacy = "Inadequate"
+    
+    # Earnings Quality
+    cf = metrics.get("cash_flow_quality", {})
+    cfo_pat = cf.get("cfo_to_pat", {}).get("value") if isinstance(cf.get("cfo_to_pat"), dict) else None
+    if cfo_pat is None:
+        earnings_quality = "Data Unavailable"
+    elif cfo_pat > 1.0:
+        earnings_quality = "Excellent"
+    elif cfo_pat > 0.75:
+        earnings_quality = "Good"
+    elif cfo_pat > 0.5:
+        earnings_quality = "Average"
+    elif cfo_pat > 0.25:
+        earnings_quality = "Below Average"
+    else:
+        earnings_quality = "Poor"
+    
+    # Governance Flags
+    danger_flags = [f for f in red_flags if f.get("severity") == "danger"]
+    warning_flags = [f for f in red_flags if f.get("severity") == "warning"]
+    if danger_flags:
+        governance = "Critical Issues"
+    elif warning_flags:
+        governance = "Some Concerns"
+    else:
+        governance = "Clean"
+    
+    return {
+        "business_scale": business_scale,
+        "revenue_momentum": revenue_momentum,
+        "solvency_position": solvency,
+        "capital_adequacy": capital_adequacy,
+        "earnings_quality": earnings_quality,
+        "governance_flags": governance,
+    }
