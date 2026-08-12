@@ -14,20 +14,34 @@ from config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-try:
-    import streamlit as st
-    def get_secret(key_name):
-        try:
-            return st.secrets.get(key_name, os.getenv(key_name, ""))
-        except Exception:
-            return os.getenv(key_name, "")
-except Exception:
-    def get_secret(key_name):
-        return os.getenv(key_name, "")
+def get_secret(key_name):
+    try:
+        import streamlit as st
+        if hasattr(st, "session_state"):
+            if key_name in st.session_state and st.session_state[key_name]:
+                return st.session_state[key_name]
+            st_key = "input_" + key_name.lower().replace("_api_key", "_k")
+            if st_key in st.session_state and st.session_state[st_key]:
+                return st.session_state[st_key]
+    except Exception:
+        pass
 
-GROQ_API_KEY = get_secret("GROQ_API_KEY")
-OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
-DEEPSEEK_API_KEY = get_secret("DEEPSEEK_API_KEY")
+    env_val = os.getenv(key_name, "")
+    if env_val:
+        return env_val
+
+    try:
+        import streamlit as st
+        try:
+            sec_val = st.secrets.get(key_name, "")
+            if sec_val:
+                return sec_val
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    return ""
 
 def sanitize(obj):
     if isinstance(obj, dict):
@@ -52,28 +66,27 @@ class MultiModelLLMClient:
         self._call_counts = {'gemini': 0, 'groq': 0, 'openrouter': 0, 'deepseek': 0}
         self._rate_limits = {'gemini': 1500, 'groq': 1000, 'openrouter': 50, 'deepseek': 999999}
         
+        self.gemini_key = get_secret("GEMINI_API_KEY")
+        self.groq_key = get_secret("GROQ_API_KEY")
+        self.openrouter_key = get_secret("OPENROUTER_API_KEY")
+        self.deepseek_key = get_secret("DEEPSEEK_API_KEY")
+
         self.gemini_configured = False
-        if GEMINI_API_KEY:
+        if self.gemini_key:
             try:
-                genai.configure(api_key=GEMINI_API_KEY)
+                genai.configure(api_key=self.gemini_key)
                 self.gemini_configured = True
             except Exception as e:
                 logger.error(f"Gemini configuration error: {e}")
 
         self.gemini_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite']
-        
-        self.groq_key = GROQ_API_KEY
         self.groq_models = ['llama-3.3-70b-versatile', 'gemma2-9b-it']
-        
-        self.openrouter_key = OPENROUTER_API_KEY
         self.openrouter_models = [
             'openrouter/auto',
             'deepseek/deepseek-r1:free',
             'qwen/qwen-2.5-72b-instruct:free',
             'google/gemma-2-9b-it:free'
         ]
-        
-        self.deepseek_key = DEEPSEEK_API_KEY
         self.deepseek_models = ['deepseek-chat']
 
     def get_provider_status(self) -> dict:

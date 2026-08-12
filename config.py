@@ -16,12 +16,31 @@ CACHE_DIR.mkdir(exist_ok=True)
 def get_secret(key_name):
     try:
         import streamlit as st
-        try:
-            return st.secrets.get(key_name, os.getenv(key_name, ""))
-        except Exception:
-            return os.getenv(key_name, "")
+        if hasattr(st, "session_state"):
+            if key_name in st.session_state and st.session_state[key_name]:
+                return st.session_state[key_name]
+            st_key = "input_" + key_name.lower().replace("_api_key", "_k")
+            if st_key in st.session_state and st.session_state[st_key]:
+                return st.session_state[st_key]
     except Exception:
-        return os.getenv(key_name, "")
+        pass
+
+    env_val = os.getenv(key_name, "")
+    if env_val:
+        return env_val
+
+    try:
+        import streamlit as st
+        try:
+            sec_val = st.secrets.get(key_name, "")
+            if sec_val:
+                return sec_val
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    return ""
 
 GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
 GROQ_API_KEY = get_secret("GROQ_API_KEY")

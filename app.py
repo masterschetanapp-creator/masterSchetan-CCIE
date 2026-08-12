@@ -91,10 +91,18 @@ def _render_sidebar():
             deepseek_k = st.text_input("DeepSeek API Key", value=os.getenv("DEEPSEEK_API_KEY", ""), type="password", key="input_deepseek_k")
             
             if st.button("Save & Update AI Engines", use_container_width=True):
-                if gemini_k: os.environ["GEMINI_API_KEY"] = gemini_k
-                if groq_k: os.environ["GROQ_API_KEY"] = groq_k
-                if openrouter_k: os.environ["OPENROUTER_API_KEY"] = openrouter_k
-                if deepseek_k: os.environ["DEEPSEEK_API_KEY"] = deepseek_k
+                if gemini_k:
+                    os.environ["GEMINI_API_KEY"] = gemini_k
+                    st.session_state["GEMINI_API_KEY"] = gemini_k
+                if groq_k:
+                    os.environ["GROQ_API_KEY"] = groq_k
+                    st.session_state["GROQ_API_KEY"] = groq_k
+                if openrouter_k:
+                    os.environ["OPENROUTER_API_KEY"] = openrouter_k
+                    st.session_state["OPENROUTER_API_KEY"] = openrouter_k
+                if deepseek_k:
+                    os.environ["DEEPSEEK_API_KEY"] = deepseek_k
+                    st.session_state["DEEPSEEK_API_KEY"] = deepseek_k
                 st.success("API keys updated successfully!")
                 st.rerun()
 
