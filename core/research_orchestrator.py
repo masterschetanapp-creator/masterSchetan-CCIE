@@ -78,6 +78,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
             source="Yahoo Finance",
             source_type="Data aggregator",
             confidence=85,
+            verification_status="SECONDARY_ONLY",
+            claim_type="FACT",
             module="stock_data"
         )
     except Exception as e:
@@ -123,6 +125,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
                 source="Financial Calculator Engine (Python Code)",
                 source_type="Calculated from Yahoo Finance financial-statement data",
                 confidence=95,
+                verification_status="PRIMARY_VERIFIED",
+                claim_type="CALCULATION",
                 module="financial_calculations"
             )
     except Exception as e:
@@ -142,6 +146,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
                 source="Forensic Audit Engine (Code)",
                 source_type="Automated Quantitative Check",
                 confidence=95,
+                verification_status="PRIMARY_VERIFIED",
+                claim_type="CALCULATION",
                 module="financial_calculations"
             )
     except Exception as e:
@@ -165,6 +171,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
                 source=n.get('source', 'Google News RSS'),
                 source_type="Verified News & Corporate Announcements",
                 confidence=80,
+                verification_status="MULTI_SOURCE_VERIFIED",
+                claim_type="EXTERNAL_ESTIMATE",
                 module="news"
             )
     except Exception as e:
@@ -187,6 +195,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         source="Yahoo Finance API (yfinance)",
         source_type="Secondary Market Data Aggregator",
         confidence=85,
+        verification_status="SECONDARY_ONLY",
+        claim_type="FACT",
         module="shareholding"
     )
 
@@ -210,6 +220,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
                 source="Multi-Model AI Thesis Engine (Gemini 2.5)",
                 source_type="AI Institutional Synthesis",
                 confidence=85,
+                verification_status="SECONDARY_ONLY",
+                claim_type="AI_INTERPRETATION",
                 module="ai_analysis"
             )
     except Exception as e:

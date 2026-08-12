@@ -7,9 +7,10 @@ class SourceTracker:
     
     def add_claim(self, claim: str, value: Any, source: str, source_type: str,
                   source_date: Optional[str] = None, confidence: int = 90,
-                  verification: str = "Primary source", module: str = "general") -> Dict[str, Any]:
-        """Register a fact with its source. Returns the claim record."""
-        # Use SOURCE_HIERARCHY from config to set source_priority if desired
+                  verification_status: str = "PRIMARY_VERIFIED",
+                  claim_type: str = "FACT",
+                  module: str = "general") -> Dict[str, Any]:
+        """Register a fact with its source, verification status, and claim type."""
         record = {
             'claim_text': claim,
             'value': value,
@@ -17,7 +18,8 @@ class SourceTracker:
             'source_type': source_type,
             'source_date': source_date,
             'confidence': confidence,
-            'verification': verification,
+            'verification_status': verification_status,
+            'claim_type': claim_type,
             'module': module,
             'last_checked': datetime.datetime.now().isoformat(),
         }
