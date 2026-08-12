@@ -78,15 +78,23 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         biz_doing_well = f"MIXED - Operating returns are modest ({roe_str} ROE)."
         biz_status = "MIXED"
 
-    # 2. Evaluate Revenue Growth
-    if rev_growth_val is not None and isinstance(rev_growth_val, (int, float)) and rev_growth_val > 15:
-        profit_growing = f"YES - 1Y Revenue expanded {rev_str} YoY."
-    elif rev_growth_val is not None and isinstance(rev_growth_val, (int, float)) and rev_growth_val > 0:
-        profit_growing = f"MODERATE - 1Y Revenue grew {rev_str} YoY."
-    elif rev_growth_val is not None and isinstance(rev_growth_val, (int, float)) and rev_growth_val < 0:
-        profit_growing = f"NO - 1Y Revenue contracted {rev_str} YoY."
+    # 2. Evaluate Net Profit Growth (PAT) — MUST check Profit growth, NOT Revenue!
+    pat_growth_obj = m_grow.get("profit_cagr_1y") or m_grow.get("pat_cagr_1y")
+    pat_growth_val = pat_growth_obj.get("value") if isinstance(pat_growth_obj, dict) else None
+    pat_str = pat_growth_obj.get("formatted_string", "N/A") if isinstance(pat_growth_obj, dict) else "N/A"
+
+    if net_income is not None and isinstance(net_income, (int, float)) and net_income < 0:
+        profit_growing = "NO - Company is currently reporting a net loss."
+    elif pat_growth_val is not None and isinstance(pat_growth_val, (int, float)) and pat_growth_val > 15:
+        profit_growing = f"YES - 1Y Net Profit expanded {pat_str} YoY."
+    elif pat_growth_val is not None and isinstance(pat_growth_val, (int, float)) and pat_growth_val > 0:
+        profit_growing = f"MODERATE - 1Y Net Profit grew {pat_str} YoY."
+    elif pat_growth_val is not None and isinstance(pat_growth_val, (int, float)) and pat_growth_val < 0:
+        profit_growing = f"NO - 1Y Net Profit contracted {pat_str} YoY (despite top-line revenue trends)."
+    elif rev_growth_val is not None and isinstance(rev_growth_val, (int, float)):
+        profit_growing = f"1Y Revenue grew {rev_str} YoY; check P&L for net profit breakdown."
     else:
-        profit_growing = f"1Y Revenue growth reported at {rev_str}."
+        profit_growing = "Check audited P&L filings for YoY net profit growth."
 
     # 3. Evaluate Debt & Red Flags
     danger_flags = [rf for rf in red_flags if isinstance(rf, dict) and rf.get("severity") == "danger"]
