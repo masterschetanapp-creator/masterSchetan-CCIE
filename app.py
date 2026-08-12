@@ -146,7 +146,14 @@ def _render_search():
 
             stock_to_run = None
 
-            if suggestions:
+            if resolved and resolved.get("is_ambiguous"):
+                st.markdown("<div style='color: #d97706; font-weight: 700; font-size: 1.05rem; margin-top: 0.5rem;'>Which Tata Motors business do you mean?</div>", unsafe_allow_html=True)
+                opts = resolved["options"]
+                opt_labels = [f"{o['name']} ({o['symbol']})" for o in opts]
+                sel = st.selectbox("Select Business Entity:", options=opt_labels, key="demerger_select")
+                idx = opt_labels.index(sel)
+                stock_to_run = opts[idx]
+            elif suggestions:
                 options = [f"{s['name']} ({s['symbol']})" for s in suggestions]
                 selected_option = st.selectbox(
                     "Select Company:",

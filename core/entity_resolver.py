@@ -276,11 +276,12 @@ def clean_search_term(query: str) -> str:
 
 def search_stocks(query: str) -> List[Dict[str, str]]:
     """
-    Search stocks using 4-tier lookup:
-    1. Exact match in 300+ COMMON_STOCKS
-    2. Direct ticker check on Yahoo Finance (e.g. IDBI.NS, MRF.NS, BOSCHLTD.NS)
-    3. Substring match in COMMON_STOCKS
-    4. Dynamic yfinance.Search query for ANY of the 2,000+ listed NSE/BSE equities
+    Search stocks using 5-tier lookup:
+    1. Special disambiguation for demerged entities (e.g. Tata Motors -> TMCV vs TMPV)
+    2. Exact match in 300+ COMMON_STOCKS
+    3. Direct ticker check on Yahoo Finance (e.g. IDBI.NS, MRF.NS, BOSCHLTD.NS)
+    4. Substring match in COMMON_STOCKS
+    5. Dynamic yfinance.Search query for ANY listed NSE/BSE equity
     """
     if not query or len(query.strip()) < 2:
         return []
@@ -289,6 +290,21 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
     clean_q = clean_search_term(query)
     no_space_q = clean_q.replace(" ", "").replace("&", "")
     
+    # 0. Post-demerger entity disambiguation for Tata Motors
+    if query_upper in ("TATA MOTORS", "TATAMOTORS", "TATA MOTOR", "TATAMOTOR") or clean_q in ("TATA MOTORS", "TATAMOTORS"):
+        return [
+            {
+                "symbol": "TMCV.NS",
+                "name": "Tata Motors Ltd — TMCV (Trucks, buses and commercial vehicles)",
+                "exchange": "NSE"
+            },
+            {
+                "symbol": "TMPV.NS",
+                "name": "Tata Motors Passenger Vehicles Ltd — TMPV (Tata cars, EVs and Jaguar Land Rover)",
+                "exchange": "NSE"
+            }
+        ]
+
     results = []
     seen_syms = set()
 
@@ -380,6 +396,27 @@ def resolve_stock(query: str) -> Optional[Dict[str, str]]:
     query_upper = query.upper().strip()
     clean_q = clean_search_term(query)
     no_space_q = clean_q.replace(" ", "").replace("&", "")
+
+    # 0. Post-demerger entity disambiguation for Tata Motors
+    if query_upper in ("TATA MOTORS", "TATAMOTORS", "TATA MOTOR", "TATAMOTOR") or clean_q in ("TATA MOTORS", "TATAMOTORS"):
+        return {
+            "symbol": "TMCV.NS",
+            "name": "Tata Motors Ltd — TMCV",
+            "exchange": "NSE",
+            "is_ambiguous": True,
+            "options": [
+                {
+                    "symbol": "TMCV.NS",
+                    "name": "Tata Motors Ltd — TMCV (Trucks, buses and commercial vehicles)",
+                    "exchange": "NSE"
+                },
+                {
+                    "symbol": "TMPV.NS",
+                    "name": "Tata Motors Passenger Vehicles Ltd — TMPV (Tata cars, EVs and Jaguar Land Rover)",
+                    "exchange": "NSE"
+                }
+            ]
+        }
 
     # 1. Exact match in COMMON_STOCKS
     if query_upper in COMMON_STOCKS:
