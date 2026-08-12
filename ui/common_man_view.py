@@ -103,15 +103,30 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         debt_control = f"STABLE - Debt to Equity is {de_str}."
         fin_health = "STABLE"
 
-    # 4. Evaluate Dividend
-    if div_yield > 0.015:
-        div_status = f"YES - Regular dividend paid (Yield: {div_yield*100:.2f}%)."
+    # 4. Evaluate Dividend (Strict 4-tier logic based on actual exchange dividend history)
+    raw_divs = info.get("_dividends_list", []) if isinstance(info, dict) else []
+    years_paid = set()
+    if isinstance(raw_divs, list):
+        for d in raw_divs:
+            if isinstance(d, dict):
+                dt_str = str(d.get("Date", d.get("date", "")))
+                if len(dt_str) >= 4 and dt_str[:4].isdigit():
+                    yr = int(dt_str[:4])
+                    if yr >= 2021:
+                        years_paid.add(yr)
+    num_years_paid = len(years_paid)
+
+    if not raw_divs and div_yield == 0:
+        div_status = "NO VERIFIED RECENT DIVIDEND"
+        div_matrix = "NONE"
+    elif num_years_paid >= 4:
+        div_status = f"REGULAR RECENTLY ({num_years_paid}/5 years paid, Yield: {div_yield*100:.2f}%)"
         div_matrix = "REGULAR RECENTLY"
-    elif div_yield > 0:
-        div_status = f"YES - Small dividend paid (Yield: {div_yield*100:.2f}%)."
-        div_matrix = "SMALL YIELD"
+    elif num_years_paid >= 1 or div_yield > 0:
+        div_status = f"IRREGULAR ({num_years_paid}/5 years paid, Yield: {div_yield*100:.2f}%)"
+        div_matrix = "IRREGULAR"
     else:
-        div_status = "NO - No recent cash dividend paid."
+        div_status = "NO VERIFIED RECENT DIVIDEND"
         div_matrix = "NONE"
 
     # 5. Evaluate Valuation (P/E, P/B, EPS)
@@ -374,23 +389,40 @@ def render_common_man_view(dossier: dict):
     # 7. Does It Pay Dividends? (Audited Dynamic Dividend Parser)
     st.markdown("### Does It Pay Dividends?")
     raw_divs = modules.get("dividends", [])
-    if isinstance(raw_divs, list) and len(raw_divs) > 0:
-        st.markdown(f"**Yes.** Verified dividend payments recorded in primary exchange disclosures:")
-        div_rows = []
-        for d in raw_divs[:5]:
-            if isinstance(d, dict):
-                div_rows.append({
-                    "Date / Event": d.get("date", d.get("Date", "Exchange Filing")),
-                    "Dividend per share": f"₹{d.get('amount', d.get('Dividend', 0)):.2f}"
-                })
+    if isinstance(raw_divs, dict) and "dividends" in raw_divs:
+        raw_divs = raw_divs["dividends"]
+    if not isinstance(raw_divs, list):
+        raw_divs = []
+
+    years_paid = set()
+    div_rows = []
+    for d in raw_divs[:10]:
+        if isinstance(d, dict):
+            dt_val = str(d.get("Date", d.get("date", "Filing Date")))
+            amt_val = d.get("Dividend (₹)", d.get("Dividend", d.get("amount", 0)))
+            div_rows.append({
+                "Date / Event": dt_val,
+                "Dividend per share": f"₹{amt_val:.2f}" if isinstance(amt_val, (int, float)) else str(amt_val)
+            })
+            if len(dt_val) >= 4 and dt_val[:4].isdigit():
+                yr = int(dt_val[:4])
+                if yr >= 2021:
+                    years_paid.add(yr)
+
+    num_years_paid = len(years_paid)
+
+    if not raw_divs and div_yield == 0:
+        st.markdown("**NO VERIFIED RECENT DIVIDEND.** No cash dividend payouts recorded in primary exchange disclosures.")
+    elif num_years_paid >= 4:
+        st.markdown(f"**REGULAR RECENTLY.** Verified dividend payouts in **{num_years_paid} of the last 5 years** (Yield: **{div_yield*100:.2f}%**):")
         if div_rows:
             st.markdown(_render_html_table(["Date / Event", "Dividend per share"], div_rows), unsafe_allow_html=True)
-        else:
-            st.write(f"Latest reported dividend yield: {div_yield*100:.2f}%")
-    elif div_yield > 0:
-        st.markdown(f"**Yes.** Current trailing dividend yield is **{div_yield*100:.2f}%** as per exchange disclosures.")
+    elif num_years_paid >= 1 or div_yield > 0:
+        st.markdown(f"**IRREGULAR.** Verified dividend payouts in **{num_years_paid} of the last 5 years** (Yield: **{div_yield*100:.2f}%**):")
+        if div_rows:
+            st.markdown(_render_html_table(["Date / Event", "Dividend per share"], div_rows), unsafe_allow_html=True)
     else:
-        st.markdown("**No / Irregular.** No recent cash dividend payouts recorded in primary exchange filings.")
+        st.markdown("**NO VERIFIED RECENT DIVIDEND.** No recent cash dividend payouts recorded in primary exchange filings.")
 
     if cur_price > 0 and div_yield > 0:
         est_lakh_div = cur_price * (100000 / cur_price) * div_yield
