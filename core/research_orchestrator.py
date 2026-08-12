@@ -182,11 +182,11 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     update_progress("Analyzing shareholding pattern...", 58)
     dossier["modules"]["holders"] = stock_data.get("holders", {})
     source_tracker.add_claim(
-        claim=f"Shareholding Pattern & Promoter Ownership",
+        claim=f"Shareholding Pattern & Insider Ownership",
         value=f"Insiders {info.get('heldPercentInsiders', 0)*100:.1f}%",
-        source="NSE/BSE Quarterly Ownership Filing",
-        source_type="Official Exchange Regulatory Disclosure",
-        confidence=95,
+        source="Yahoo Finance API (yfinance)",
+        source_type="Secondary Market Data Aggregator",
+        confidence=85,
         module="shareholding"
     )
 

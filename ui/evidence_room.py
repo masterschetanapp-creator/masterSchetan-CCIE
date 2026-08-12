@@ -79,11 +79,11 @@ def render_evidence_room(source_tracker_data: dict):
 
     # Dynamic Categorization Mapping
     categorized = {
-        "📊 Audited Financial Statements": [],
-        "🧮 Calculated Ratios & Forensic Checks": [],
-        "🏛️ Exchange Disclosures & Shareholding": [],
-        "📰 News & Corporate Filings": [],
-        "🤖 Multi-Model AI Synthesis": []
+        "📊 Primary Financial Statements & Market Quotes": [],
+        "🧮 Calculated Ratios & Forensic Checks (Python Engine)": [],
+        "📦 Secondary Market Data & Shareholding (yfinance)": [],
+        "📰 Verified News RSS & Regulatory Filings": [],
+        "🤖 Multi-Model AI Synthesis (Gemini 2.5)": []
     }
 
     for item in raw_claims:
@@ -92,15 +92,15 @@ def render_evidence_room(source_tracker_data: dict):
         src = str(item.get("source", "")).lower()
 
         if "financial_calculations" in mod or "calculator" in src or "ratio" in src_type:
-            categorized["🧮 Calculated Ratios & Forensic Checks"].append(item)
+            categorized["🧮 Calculated Ratios & Forensic Checks (Python Engine)"].append(item)
+        elif "shareholding" in mod or "holder" in mod or "aggregator" in src_type or "yfinance" in src:
+            categorized["📦 Secondary Market Data & Shareholding (yfinance)"].append(item)
         elif "financial" in mod or "statement" in src_type or "audited" in src_type:
-            categorized["📊 Audited Financial Statements"].append(item)
-        elif "shareholding" in mod or "holder" in mod or "disclosure" in src_type:
-            categorized["🏛️ Exchange Disclosures & Shareholding"].append(item)
+            categorized["📊 Primary Financial Statements & Market Quotes"].append(item)
         elif "news" in mod or "rss" in src or "announcement" in src_type:
-            categorized["📰 News & Corporate Filings"].append(item)
+            categorized["📰 Verified News RSS & Regulatory Filings"].append(item)
         else:
-            categorized["🤖 Multi-Model AI Synthesis"].append(item)
+            categorized["🤖 Multi-Model AI Synthesis (Gemini 2.5)"].append(item)
 
     # Render Expandable Evidence Categories
     for cat_title, items in categorized.items():
