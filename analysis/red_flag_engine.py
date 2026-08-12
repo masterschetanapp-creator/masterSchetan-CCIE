@@ -154,9 +154,11 @@ def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[s
             'what_it_means': "Promoters have less skin in the game, though the company may be professionally managed."
         })
 
-    # Check 10: Revenue-Profit Divergence (Revenue up > 15% but PAT down)
+    # Check 10: Revenue-Profit Divergence (Revenue up > 15% but Profit down)
     rev_1y = computed_metrics.get('growth', {}).get('revenue_cagr_1y', {}).get('value')
-    pat_1y = computed_metrics.get('growth', {}).get('pat_cagr_1y', {}).get('value')
+    pat_1y = computed_metrics.get('growth', {}).get('profit_cagr_1y', {}).get('value')
+    if pat_1y is None:
+        pat_1y = computed_metrics.get('growth', {}).get('pat_cagr_1y', {}).get('value')
     if rev_1y is not None and pat_1y is not None and rev_1y > 15.0 and pat_1y < 0:
         flags.append({
             'id': 10,

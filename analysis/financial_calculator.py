@@ -331,13 +331,21 @@ def calculate_cash_flow_quality(cashflow: Dict[str, Any], income_stmt: Dict[str,
     return result
 
 
+from data.sector_templates import classify_sector
+
+
 def calculate_all_metrics(financial_data: Dict[str, Any]) -> Dict[str, Any]:
     """Master function. Takes raw financial statements and returns all computed metrics."""
     metrics = {}
 
     info = financial_data.get('info', {})
     sector = info.get('sector', '')
-    is_bank = 'Financial' in sector or 'Bank' in sector
+    industry = info.get('industry', '')
+    name = info.get('longName') or info.get('shortName', '')
+    symbol = info.get('symbol', '')
+
+    company_type = classify_sector(sector, industry, name, symbol)
+    is_bank = (company_type == "BANK")
 
     # Get structured yearly lists
     income_stmts = financial_data.get('annual_income_stmt') or financial_data.get('financials', {}).get('annual_income_stmt', [])
