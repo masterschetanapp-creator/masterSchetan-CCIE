@@ -77,215 +77,14 @@ def _generate_detailed_segmental_breakdown(info: dict, symbol: str, company_name
             if formatted_segs:
                 return formatted_segs
 
-    s_lower = str(sector_name).lower()
-    c_lower = str(company_name).lower()
-    sym_upper = str(symbol).upper()
-
-    if "PNB.NS" in sym_upper or "PUNJAB NATIONAL BANK" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Retail Banking & Digital Financial Services",
-                "Revenue Share": "44.5%",
-                "Growth Trajectory": "Core NIM & CASA driver; expanding digital retail loan book & credit card penetration (+14.2% YoY)",
-                "Strategic Margin / Outlook": "High Margin / Low Credit Cost"
-            },
-            {
-                "Business Segment / Division": "Corporate & Wholesale Commercial Banking",
-                "Revenue Share": "34.8%",
-                "Growth Trajectory": "Infrastructure, industrial capex & large corporate credit; improving GNPA recovery cycle",
-                "Strategic Margin / Outlook": "Improving Asset Quality"
-            },
-            {
-                "Business Segment / Division": "Treasury, Forex & Investment Operations",
-                "Revenue Share": "14.7%",
-                "Growth Trajectory": "SLR securities portfolio, forex trading & yield management sensitive to RBI repo rate cycles",
-                "Strategic Margin / Outlook": "Interest Rate Sensitive"
-            },
-            {
-                "Business Segment / Division": "MSME, Agriculture & Priority Sector Credit",
-                "Revenue Share": "6.0%",
-                "Growth Trajectory": "Government backed priority sector credit & digital micro-loan disbursement platform",
-                "Strategic Margin / Outlook": "Government Policy Supported"
-            }
-        ]
-
-    elif "SJVN.NS" in sym_upper or "SJVN" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Hydro Electric Power Generation & PPA Assets",
-                "Revenue Share": "56.8%",
-                "Growth Trajectory": "Long-term 25-35 year PPA backed regulated 15.5% ROE tariffs; high EBITDA margin (~85%)",
-                "Strategic Margin / Outlook": "High Cash Flow Anchor (~85% Margin)"
-            },
-            {
-                "Business Segment / Division": "Solar & Renewable Energy (EPC / IPP)",
-                "Revenue Share": "27.4%",
-                "Growth Trajectory": "Fastest growing division; 3.2+ GW capacity under active execution across SECI and state tenders",
-                "Strategic Margin / Outlook": "High Volume Growth (+32% YoY)"
-            },
-            {
-                "Business Segment / Division": "Wind Power Generation & Clean Energy Infrastructure",
-                "Revenue Share": "10.2%",
-                "Growth Trajectory": "Operational wind farm assets providing steady seasonal generation & green attribute credits",
-                "Strategic Margin / Outlook": "Stable Cash Conversion"
-            },
-            {
-                "Business Segment / Division": "Power Trading, Project Consultancy & Thermal",
-                "Revenue Share": "5.6%",
-                "Growth Trajectory": "Power trading desk & technical consultancy for cross-border power transmission & hydro engineering",
-                "Strategic Margin / Outlook": "Fee-based Capital Light"
-            }
-        ]
-
-    elif "power" in s_lower or "energy" in s_lower or "ntpc" in c_lower or "suzlon" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Hydro Electric Power Generation & PPA Assets",
-                "Revenue Share": "56.8%",
-                "Growth Trajectory": "Long-term 25-35 year PPA backed regulated 15.5% ROE tariffs; high EBITDA margin (~85%)",
-                "Strategic Margin / Outlook": "High Cash Flow Anchor (~85% Margin)"
-            },
-            {
-                "Business Segment / Division": "Solar & Renewable Energy (EPC / IPP)",
-                "Revenue Share": "27.4%",
-                "Growth Trajectory": "Fastest growing division; 3.2+ GW capacity under active execution across SECI and state tenders",
-                "Strategic Margin / Outlook": "High Volume Growth (+32% YoY)"
-            },
-            {
-                "Business Segment / Division": "Wind Power Generation & Clean Energy Infrastructure",
-                "Revenue Share": "10.2%",
-                "Growth Trajectory": "Operational wind farm assets providing steady seasonal generation & green attribute credits",
-                "Strategic Margin / Outlook": "Stable Cash Conversion"
-            },
-            {
-                "Business Segment / Division": "Power Trading, Consultancy & Merchant Energy",
-                "Revenue Share": "5.6%",
-                "Growth Trajectory": "Cross-border power sales & short-term exchange trading on IEX during peak demand cycles",
-                "Strategic Margin / Outlook": "Merchant Upside Potential"
-            }
-        ]
-
-    elif "technology" in s_lower or "it" in s_lower or "software" in s_lower or "tcs" in c_lower or "infy" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Banking, Financial Services & Insurance (BFSI)",
-                "Revenue Share": "31.5%",
-                "Growth Trajectory": "Core revenue engine; core banking modernization, Generative AI integration & cloud transformation",
-                "Strategic Margin / Outlook": "High Operating Margin (~26%)"
-            },
-            {
-                "Business Segment / Division": "Consumer Business, Retail & Logistics Technology",
-                "Revenue Share": "16.8%",
-                "Growth Trajectory": "Omnichannel e-commerce, AI supply chain optimization & automated retail technology",
-                "Strategic Margin / Outlook": "Expanding Contract Pipeline"
-            },
-            {
-                "Business Segment / Division": "Life Sciences, Healthcare & Biotechnology Solutions",
-                "Revenue Share": "11.4%",
-                "Growth Trajectory": "Clinical data management, regulatory compliance tech & pharma AI research contracts",
-                "Strategic Margin / Outlook": "High Realization Niche"
-            },
-            {
-                "Business Segment / Division": "Manufacturing, Industrial ER&D & Automotive Tech",
-                "Revenue Share": "21.3%",
-                "Growth Trajectory": "Smart factory IoT, automotive software engineering (SDV) & digital twin technology",
-                "Strategic Margin / Outlook": "High Value-Add ER&D"
-            },
-            {
-                "Business Segment / Division": "Communications, Media & Tech Platforms",
-                "Revenue Share": "19.0%",
-                "Growth Trajectory": "5G network virtualization, cloud migration & enterprise telecom digital platforms",
-                "Strategic Margin / Outlook": "Steady Cash Generation"
-            }
-        ]
-
-    elif "auto" in s_lower or "vehicle" in s_lower or "tata motors" in c_lower or "maruti" in c_lower or "m&m" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Commercial Vehicles (Medium & Heavy Duty)",
-                "Revenue Share": "38.2%",
-                "Growth Trajectory": "Freight activity and infrastructure capex driven fleet replacements; expanding CNG & LNG models",
-                "Strategic Margin / Outlook": "Cyclical Upcycle Advantage"
-            },
-            {
-                "Business Segment / Division": "Passenger Vehicles & Electric Mobility (EVs)",
-                "Revenue Share": "42.6%",
-                "Growth Trajectory": "SUV market leadership & EV market dominance (over 70% domestic EV market share)",
-                "Strategic Margin / Outlook": "High Growth & Re-rating Driver"
-            },
-            {
-                "Business Segment / Division": "Spare Parts, Aftermarket & Fleet Services",
-                "Revenue Share": "12.5%",
-                "Growth Trajectory": "High margin recurring parts sales, AMC maintenance contracts & digital telematics subscription",
-                "Strategic Margin / Outlook": "High Margin (~30% EBITDA)"
-            },
-            {
-                "Business Segment / Division": "Vehicle Financing & Mobility Solutions",
-                "Revenue Share": "6.7%",
-                "Growth Trajectory": "Captive retail loan financing & digital mobility fleet management platform",
-                "Strategic Margin / Outlook": "Stable NIM Contribution"
-            }
-        ]
-
-    elif "capital goods" in s_lower or "engineering" in s_lower or "defense" in s_lower or "l&t" in c_lower or "mazdock" in c_lower or "hal" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Infrastructure & Megaprojects EPC",
-                "Revenue Share": "51.4%",
-                "Growth Trajectory": "Core order book execution across transport, urban infrastructure, water systems & renewables",
-                "Strategic Margin / Outlook": "Heavy Order Book Backlog"
-            },
-            {
-                "Business Segment / Division": "Energy, Hydrocarbon & Power Equipment",
-                "Revenue Share": "23.6%",
-                "Growth Trajectory": "Offshore & onshore oil & gas EPC, green hydrogen electrolyzer manufacturing & clean energy",
-                "Strategic Margin / Outlook": "Margin Expansion (+140 bps)"
-            },
-            {
-                "Business Segment / Division": "Defense Systems, Aerospace & Shipbuilding",
-                "Revenue Share": "16.5%",
-                "Growth Trajectory": "High margin indigenous defense manufacturing under Make-in-India guidelines (submarines, radar, missiles)",
-                "Strategic Margin / Outlook": "High Margin (~24% EBIT)"
-            },
-            {
-                "Business Segment / Division": "Precision Industrial Products & Automation Services",
-                "Revenue Share": "8.5%",
-                "Growth Trajectory": "Factory automation equipment, valves, industrial machinery & digital engineering",
-                "Strategic Margin / Outlook": "High ROCE Business Line"
-            }
-        ]
-
-    elif "fmcg" in s_lower or "consumer" in s_lower or "hul" in c_lower or "itc" in c_lower or "nestle" in c_lower:
-        return [
-            {
-                "Business Segment / Division": "Home Care, Fabric Wash & Cleaning Products",
-                "Revenue Share": "33.8%",
-                "Growth Trajectory": "Market share leadership; volume recovery driven by rural demand & premiumization of detergents",
-                "Strategic Margin / Outlook": "Volume & Cash Flow Engine"
-            },
-            {
-                "Business Segment / Division": "Beauty, Personal Care & Skin Health",
-                "Revenue Share": "37.5%",
-                "Growth Trajectory": "Highest EBIT margin segment (~27%); expansion into premium serums, skincare & D2C channels",
-                "Strategic Margin / Outlook": "Highest Profitability Segment"
-            },
-            {
-                "Business Segment / Division": "Foods, Refreshments & Packaged Beverages",
-                "Revenue Share": "28.7%",
-                "Growth Trajectory": "Growth accelerated by health & wellness offerings, ice creams, tea, coffee & culinary products",
-                "Strategic Margin / Outlook": "High Revenue CAGR (+11%)"
-            }
-        ]
-
-    else:
-        return [
-            {
-                "Business Segment / Division": f"Primary Operating Division ({sector_name if sector_name else 'Core Lines'})",
-                "Revenue Share": "Core Operations",
-                "Growth Trajectory": "This information could not be reliably verified from the available sources.",
-                "Strategic Margin / Outlook": "Information unavailable"
-            }
-        ]
+    return [
+        {
+            "Business Segment / Division": f"Core {sector_name if sector_name else 'Operating'} Operations",
+            "Revenue Share": "Primary Revenue Stream",
+            "Growth Trajectory": "Segment revenue contribution breakdown could not be reliably verified from available disclosures.",
+            "Strategic Margin / Outlook": "Unverified Segment Breakdown"
+        }
+    ]
 
 
 def _generate_dynamic_shareholding(info: dict, symbol: str, company_name: str, sector_name: str, promoter_holding: str, institutional_holding: str, ctso: dict = None):
@@ -791,47 +590,62 @@ def render_simple_view(dossier: dict):
     render_investor_questions(questions)
 
     st.markdown("**💡 Someone Told You to Buy It? - Tip Check:**")
-    tip_check_rows = [
-        {"Question": "Does the company make money?", "Simple answer": "YES"},
-        {"Question": "Is profit improving?", "Simple answer": "YES - operating earnings are steady"},
-        {"Question": "Is the core business growing?", "Simple answer": "YES - revenue trajectory is positive"},
-        {"Question": "Are bad loans / debt a major current problem?", "Simple answer": "NO"},
-        {"Question": "Does it pay dividends?", "Simple answer": "YES - regular historical dividend track record"},
-        {"Question": "Is it obviously cheap?", "Simple answer": "NO"},
-        {"Question": "Main thing people may overlook", "Simple answer": "Valuation and deposit/revenue growth velocity"}
-    ]
+    
+    from ui.common_man_view import _generate_empirical_common_man_verdict
+
+    price_data = modules.get("price_data", {})
+    computed = modules.get("computed_metrics", {})
+    red_flags = modules.get("red_flags", [])
+    dividend_history = modules.get("dividends", [])
+    if isinstance(dividend_history, dict) and "dividends" in dividend_history:
+        dividend_history = dividend_history["dividends"]
+    if not isinstance(dividend_history, list):
+        dividend_history = []
+
+    cm_verdicts = _generate_empirical_common_man_verdict(
+        company_name, symbol, sector_name, info, price_data, computed, red_flags,
+        dividend_history=dividend_history
+    )
+
+    tip_check_rows = cm_verdicts.get("tip_check_rows", [])
+    tip_result = cm_verdicts.get("tip_check_result", "MIXED FUNDAMENTALS")
+    bottom_line = cm_verdicts.get("bottom_line", "")
+    final_research_status = cm_verdicts.get("final_research_status", "")
+
     st.markdown(_render_html_table(["Question", "Simple answer"], tip_check_rows), unsafe_allow_html=True)
 
+    if "SUPPORTED" in tip_result:
+        callout_cat = "success"
+        callout_prefix = "🟢"
+    elif "CONCERNS" in tip_result:
+        callout_cat = "danger"
+        callout_prefix = "🔴"
+    else:
+        callout_cat = "warning"
+        callout_prefix = "🟡"
+
     render_callout(
-        "TIP CHECK RESULT: 🟢 FUNDAMENTALLY SUPPORTED IDEA — The business has genuine fundamental strengths, but do not assume the current price is cheap just because the company is performing well.",
-        label="TIP CHECK RESULT", category="success"
+        f"TIP CHECK RESULT: {callout_prefix} {tip_result} — Evaluated 100% empirically from primary financial statements and automated forensic audit checks.",
+        label="TIP CHECK RESULT", category=callout_cat
     )
 
     # ── Section 15: What to Monitor Next Quarter ──────────────────────────────
     render_section_header("15. What Should an Investor Monitor?", "🔭", f"Key variables for {sector_name}")
-    monitoring_points = modules.get("what_to_monitor", [
-        "Core Operating Margins: Monitor quarterly margin trajectory.",
-        "Revenue vs Expense Growth: Track operating leverage efficiency.",
-        "Headline Profit Quality: Compare net profit against operating cash flows.",
-        "Asset Quality & Borrowing: Monitor credit health and borrowing costs.",
-        "Segmental Growth Momentum: Evaluate performance across core operating divisions.",
-        "Capital Adequacy & Funding Cost: Track cost of funds and capital buffers."
-    ])
+    monitoring_points = cm_verdicts.get("beginner_watch_next") or modules.get("what_to_monitor", [])
     for i, p in enumerate(monitoring_points, 1):
         st.markdown(f"**{i}.** {p}")
 
+    status_color = "#059669" if "🟢" in final_research_status else ("#dc2626" if "🔴" in final_research_status else "#d97706")
+
     st.markdown(f"""
-    <div style="background: #ffffff; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; border-left: 5px solid #059669; margin: 1.5rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.04);">
-        <h3 style="color: #059669; margin-top: 0;">📌 Bottom Line Summary</h3>
+    <div style="background: #ffffff; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; border-left: 5px solid {status_color}; margin: 1.5rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.04);">
+        <h3 style="color: {status_color}; margin-top: 0;">📌 Bottom Line Summary</h3>
         <p style="color: #0f172a; font-size: 1.05rem; line-height: 1.6; margin: 0;">
-            There are currently more positives than negatives in <strong>{company_name}</strong>'s business. 
-            The enterprise is profitable, growing steadily, and maintaining a comfortable financial position. 
-            However, a good company is not automatically a bargain at every price. 
-            The main question for a new investor is whether the business can continue performing strongly enough to justify the price being paid today.
+            {bottom_line}
         </p>
         <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 1rem 0;">
         <div style="font-size: 1.1rem; font-weight: 700; color: #0f172a;">
-            Final Research Status: <span class="badge badge-confirmed">Research View: 🟢 Positive Business / 🟡 Price Matters</span>
+            Final Research Status: <span class="badge badge-confirmed">{final_research_status}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)

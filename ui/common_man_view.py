@@ -127,9 +127,12 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         elif len(danger_flags) > 0:
             debt_control = f"MONITOR - {len(danger_flags)} high-severity forensic flags detected."
             fin_health = "NEEDS MONITORING"
-        else:
+        elif gnpa_val is not None or nnpa_val is not None:
             debt_control = f"YES - Bad loans under control (GNPA: {gnpa_str}, NNPA: {nnpa_str}). Capital position is adequate."
             fin_health = "COMFORTABLE"
+        else:
+            debt_control = "UNCLEAR - Asset-quality data (GNPA/NNPA) could not be verified from available market data."
+            fin_health = "UNCLEAR / UNVERIFIED"
     else:
         if de_val is not None and isinstance(de_val, (int, float)) and de_val > 2.0:
             debt_control = f"NO / HIGH RISK - Debt-to-Equity is elevated ({de_str})."
@@ -345,7 +348,12 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         roe_imp_text = "Operating returns generated on shareholder money remain modest."
 
     if is_bank:
-        debt_att_text = "Bad loans and credit risk levels are low and well-controlled." if (nnpa_val is None or nnpa_val <= 1.0) else "Net bad loans require ongoing monitoring."
+        if nnpa_val is not None and isinstance(nnpa_val, (int, float)) and nnpa_val <= 1.0:
+            debt_att_text = "Bad loans and credit risk levels are low and well-controlled."
+        elif nnpa_val is not None and isinstance(nnpa_val, (int, float)) and nnpa_val > 1.0:
+            debt_att_text = f"Net bad loans (NNPA: {nnpa_str}) require ongoing monitoring."
+        else:
+            debt_att_text = "Asset-quality disclosures (GNPA/NNPA) require verification from official quarterly filings."
         careful_debt_text = "Asset quality and credit cost movements require monitoring."
         watch_next_list = [
             "Profit earned on total loans and deposits (NIM spread)",
