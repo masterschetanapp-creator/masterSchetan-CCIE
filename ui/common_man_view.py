@@ -194,8 +194,8 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         price_matrix = "ATTRACTIVE"
     else:
         valuation_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
-        valuation_expl = f"Trailing P/E ratio ({pe_str}) contains accounting items or unverified inputs. Rely on normalized cash flows rather than headline P/E."
-        cheap_answer = "UNCLEAR - Earnings contain accounting distortions."
+        valuation_expl = "Valuation is difficult to judge reliably — current earnings multiple could not be verified from available primary disclosures."
+        cheap_answer = "UNCLEAR - Current earnings multiple could not be verified."
         price_matrix = "UNCLEAR"
 
     # 6. Sector & Stock Specific Watchpoint

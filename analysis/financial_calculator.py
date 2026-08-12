@@ -55,16 +55,15 @@ def calculate_profitability(income_stmt: Dict[str, Any], balance_sheet: Dict[str
     # 1. Return on Equity (ROE)
     if net_income is not None and total_equity is not None and total_equity > 0:
         roe = (net_income / total_equity) * 100
+        status = 'green' if roe > 15 else ('amber' if roe >= 10 else 'red')
+        result['roe'] = {
+            'value': roe,
+            'formatted_string': f"{roe:.2f}%",
+            'status': status,
+            'explanation': "Return on Equity (ROE) measures how efficiently a company generates profits from shareholder money."
+        }
     else:
-        roe = 14.85  # Robust sector average fallback
-        
-    status = 'green' if roe > 15 else ('amber' if roe >= 10 else 'red')
-    result['roe'] = {
-        'value': roe,
-        'formatted_string': f"{roe:.2f}%",
-        'status': status,
-        'explanation': "Return on Equity (ROE) measures how efficiently a company generates profits from shareholder money."
-    }
+        result['roe'] = None
 
     # Revenue / Topline
     total_revenue = get_first_valid(income_stmt, [
@@ -261,40 +260,42 @@ def calculate_debt_metrics(balance_sheet: Dict[str, Any], income_stmt: Dict[str,
 
 
 def calculate_valuation(price: float, info: Dict[str, Any]) -> Dict[str, Any]:
-    """P/E, P/B, Dividend Yield with zero-blank fallbacks."""
+    """P/E, P/B, Dividend Yield without invented fallbacks."""
     result = {}
 
     pe = info.get('trailingPE') or info.get('forwardPE')
-    if pe is None or not isinstance(pe, (int, float)) or pe <= 0:
-        sec = info.get('sector', '')
-        pe = 18.50 if 'Bank' in sec or 'Financial' in sec else (28.40 if 'Tech' in sec or 'IT' in sec else 22.10)
-        
-    result['pe_ratio'] = {
-        'value': float(pe),
-        'formatted_string': f"{float(pe):.2f}",
-        'status': 'green' if pe < 25 else ('amber' if pe < 45 else 'red'),
-        'explanation': "Price-to-Earnings (P/E) ratio: How much investors pay for ₹1 of profit."
-    }
+    if pe is not None and isinstance(pe, (int, float)) and pe > 0:
+        result['pe_ratio'] = {
+            'value': float(pe),
+            'formatted_string': f"{float(pe):.2f}",
+            'status': 'green' if pe < 25 else ('amber' if pe < 45 else 'red'),
+            'explanation': "Price-to-Earnings (P/E) ratio: How much investors pay for ₹1 of profit."
+        }
+    else:
+        result['pe_ratio'] = None
 
     pb = info.get('priceToBook')
-    if pb is None or not isinstance(pb, (int, float)) or pb <= 0:
-        pb = 2.45
-        
-    result['pb_ratio'] = {
-        'value': float(pb),
-        'formatted_string': f"{float(pb):.2f}",
-        'status': 'green' if pb < 3 else ('amber' if pb < 6 else 'red'),
-        'explanation': "Price-to-Book (P/B) ratio: Stock price relative to net asset book value."
-    }
+    if pb is not None and isinstance(pb, (int, float)) and pb > 0:
+        result['pb_ratio'] = {
+            'value': float(pb),
+            'formatted_string': f"{float(pb):.2f}",
+            'status': 'green' if pb < 3 else ('amber' if pb < 6 else 'red'),
+            'explanation': "Price-to-Book (P/B) ratio: Stock price relative to net asset book value."
+        }
+    else:
+        result['pb_ratio'] = None
 
     div_yield = info.get('dividendYield')
-    div_pct = (div_yield * 100 if div_yield <= 1.0 else div_yield) if isinstance(div_yield, (int, float)) else 1.20
-    result['dividend_yield'] = {
-        'value': float(div_pct),
-        'formatted_string': f"{float(div_pct):.2f}%",
-        'status': 'green' if div_pct > 2 else 'neutral',
-        'explanation': "Dividend Yield: Annual dividend payout expressed as % of stock price."
-    }
+    if div_yield is not None and isinstance(div_yield, (int, float)) and div_yield >= 0:
+        div_pct = div_yield * 100 if div_yield <= 1.0 else div_yield
+        result['dividend_yield'] = {
+            'value': float(div_pct),
+            'formatted_string': f"{float(div_pct):.2f}%",
+            'status': 'green' if div_pct > 2 else 'neutral',
+            'explanation': "Dividend Yield: Annual dividend payout expressed as % of stock price."
+        }
+    else:
+        result['dividend_yield'] = None
 
     return result
 
