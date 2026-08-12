@@ -29,31 +29,64 @@ ARCHETYPES = {
 }
 
 
+def get_metric_val(metrics: dict, group: str, key: str, fallback_label: str = "N/A") -> str:
+    """Helper to safely extract formatted metric values from nested computed_metrics dict."""
+    if not isinstance(metrics, dict):
+        return fallback_label
+    grp = metrics.get(group, {})
+    if isinstance(grp, dict):
+        item = grp.get(key)
+        if isinstance(item, dict):
+            return item.get("formatted_string", str(item.get("value", fallback_label)))
+        elif item is not None:
+            return str(item)
+    if key in metrics:
+        v = metrics[key]
+        return v.get("formatted_string") if isinstance(v, dict) else str(v)
+    return fallback_label
+
+
+def get_metric_num(metrics: dict, group: str, key: str, default: float = 0.0) -> float:
+    """Helper to extract numerical float values from nested computed_metrics dict."""
+    if not isinstance(metrics, dict):
+        return default
+    grp = metrics.get(group, {})
+    if isinstance(grp, dict):
+        item = grp.get(key)
+        if isinstance(item, dict):
+            val = item.get("value")
+            if val is not None and isinstance(val, (int, float)):
+                return float(val)
+        elif item is not None and isinstance(item, (int, float)):
+            return float(item)
+    return default
+
+
 def _build_ctso_input(info: dict, computed_metrics: dict, red_flags: list, sector_template: dict, news: list) -> str:
     """Builds a concise text summary of the company's financial position for the LLM."""
     
     # Extract Profitability
-    roe = computed_metrics.get("ROE", "N/A")
-    roce = computed_metrics.get("ROCE", "N/A")
-    op_margin = computed_metrics.get("Operating Margin", "N/A")
+    roe = get_metric_val(computed_metrics, "profitability", "roe")
+    roce = get_metric_val(computed_metrics, "profitability", "roce")
+    op_margin = get_metric_val(computed_metrics, "profitability", "operating_margin")
     
     # Extract Growth
-    rev_cagr_1y = computed_metrics.get("Revenue CAGR 1Y", "N/A")
-    rev_cagr_3y = computed_metrics.get("Revenue CAGR 3Y", "N/A")
-    pat_cagr = computed_metrics.get("PAT CAGR", "N/A")
+    rev_cagr_1y = get_metric_val(computed_metrics, "growth", "revenue_cagr_1y")
+    rev_cagr_3y = get_metric_val(computed_metrics, "growth", "revenue_cagr_3y")
+    pat_cagr = get_metric_val(computed_metrics, "growth", "profit_cagr_1y")
     
     # Extract Debt
-    de_ratio = computed_metrics.get("D/E", "N/A")
-    int_cov = computed_metrics.get("Interest Coverage", "N/A")
+    de_ratio = get_metric_val(computed_metrics, "debt_metrics", "debt_to_equity")
+    int_cov = get_metric_val(computed_metrics, "debt_metrics", "interest_coverage")
     
     # Extract Cash Flow
-    cfo_pat = computed_metrics.get("CFO/PAT", "N/A")
-    fcf = computed_metrics.get("FCF", "N/A")
+    cfo_pat = get_metric_val(computed_metrics, "cash_flow_quality", "cfo_to_pat")
+    fcf = get_metric_val(computed_metrics, "cash_flow_quality", "fcf")
     
     # Extract Valuation
-    pe = computed_metrics.get("P/E", "N/A")
-    pb = computed_metrics.get("P/B", "N/A")
-    div_yield = computed_metrics.get("Dividend Yield", "N/A")
+    pe = get_metric_val(computed_metrics, "valuation", "pe_ratio")
+    pb = get_metric_val(computed_metrics, "valuation", "pb_ratio")
+    div_yield = get_metric_val(computed_metrics, "valuation", "dividend_yield")
     
     # Format Red Flags
     red_flag_text = ""
@@ -125,10 +158,10 @@ def _generate_rule_based_ctso(info: dict, computed_metrics: dict, red_flags: lis
         except (ValueError, TypeError):
             return 0.0
 
-    roe = get_num("ROE")
-    de = get_num("D/E")
-    rev_growth = get_num("Revenue CAGR 1Y")
-    div_yield = get_num("Dividend Yield")
+    roe = get_metric_num(computed_metrics, "profitability", "roe")
+    de = get_metric_num(computed_metrics, "debt_metrics", "debt_to_equity")
+    rev_growth = get_metric_num(computed_metrics, "growth", "revenue_cagr_1y")
+    div_yield = get_metric_num(computed_metrics, "valuation", "dividend_yield")
     op_margin_trend = computed_metrics.get("Operating Margin Trend", "flat")
     de_trend = computed_metrics.get("D/E Trend", "flat")
     
