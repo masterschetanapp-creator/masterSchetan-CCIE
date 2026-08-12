@@ -36,7 +36,7 @@ def _render_html_table(headers: list, rows: list) -> str:
     return html
 
 
-def _generate_empirical_common_man_verdict(company_name: str, symbol: str, sector_name: str, info: dict, price_data: dict, computed: dict, red_flags: list) -> dict:
+def _generate_empirical_common_man_verdict(company_name: str, symbol: str, sector_name: str, info: dict, price_data: dict, computed: dict, red_flags: list, dividend_history: list = None) -> dict:
     """
     Computes 100% dynamic, data-driven Common Man research verdicts, 30s questions, valuation classifications,
     tip check results, decision support matrix, and bottom line summary based strictly on empirical financial figures.
@@ -140,17 +140,21 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
             debt_control = f"STABLE - Debt to Equity is {de_str}."
             fin_health = "STABLE"
 
-    # 4. Evaluate Dividend (Strict 4-tier logic based on actual exchange dividend history)
-    raw_divs = info.get("_dividends_list", []) if isinstance(info, dict) else []
+    # 4. Evaluate Dividend (Single Unified Engine)
+    raw_divs = dividend_history if isinstance(dividend_history, list) else []
+    if isinstance(raw_divs, dict) and "dividends" in raw_divs:
+        raw_divs = raw_divs["dividends"]
+    if not isinstance(raw_divs, list):
+        raw_divs = []
+
     years_paid = set()
-    if isinstance(raw_divs, list):
-        for d in raw_divs:
-            if isinstance(d, dict):
-                dt_str = str(d.get("Date", d.get("date", "")))
-                if len(dt_str) >= 4 and dt_str[:4].isdigit():
-                    yr = int(dt_str[:4])
-                    if yr >= 2021:
-                        years_paid.add(yr)
+    for d in raw_divs:
+        if isinstance(d, dict):
+            dt_str = str(d.get("Date", d.get("date", "")))
+            if len(dt_str) >= 4 and dt_str[:4].isdigit():
+                yr = int(dt_str[:4])
+                if yr >= 2021:
+                    years_paid.add(yr)
     num_years_paid = len(years_paid)
 
     if not raw_divs and div_yield == 0:
@@ -335,10 +339,18 @@ def render_common_man_view(dossier: dict):
     computed = modules.get("computed_metrics", {})
     red_flags = modules.get("red_flags", [])
     profile = modules.get("company_snapshot", {})
-    sector_name = profile.get("sector", "Industry")
-    
-    # Generate empirical verdicts (100% data-driven, zero static hardcodes)
-    empirical_cm = _generate_empirical_common_man_verdict(company_name, symbol, sector_name, info, price_data, computed, red_flags)
+    # Extract single unified dividend history
+    dividend_history = modules.get("dividends", [])
+    if isinstance(dividend_history, dict) and "dividends" in dividend_history:
+        dividend_history = dividend_history["dividends"]
+    if not isinstance(dividend_history, list):
+        dividend_history = []
+
+    # Generate empirical verdicts (100% data-driven, single unified dividend engine)
+    empirical_cm = _generate_empirical_common_man_verdict(
+        company_name, symbol, sector_name, info, price_data, computed, red_flags,
+        dividend_history=dividend_history
+    )
     
     # Merge AI report outputs with empirical verdicts if available
     ai_cm_report = modules.get("common_man_report", {})
