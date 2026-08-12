@@ -269,6 +269,11 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         simple_explanations = explain_all_metrics(computed_metrics, gemini)
         dossier["modules"]["simple_explanations"] = simple_explanations
 
+        # Generate Common Man Report
+        update_progress("Generating Common Man Equity Research report...", 89)
+        common_man_report = agents.generate_common_man_report(stock_data_with_ctso, computed_metrics, red_flags, sector_template, news)
+        dossier["modules"]["common_man_report"] = common_man_report
+
         # Generate investor questions (not BUY/SELL)
         update_progress("Preparing investor decision questions...", 89)
         questions = agents.generate_investor_questions(stock_data_with_ctso, computed_metrics, red_flags)

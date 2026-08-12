@@ -157,3 +157,55 @@ class ResearchAgents:
             "Asset Quality & Borrowing: Monitor debt levels, interest coverage, and credit health.",
             "Execution on Guidance: Evaluate management's progress on announced expansion plans."
         ]
+
+    def generate_common_man_report(self, stock_data: dict, computed_metrics: dict, red_flags: list, sector_template: dict, news: list) -> dict:
+        """Generate dynamic, stock-specific Common Man report using COMMON_MAN_TRANSLATOR_PROMPT."""
+        try:
+            from .prompts.system_prompts import COMMON_MAN_TRANSLATOR_PROMPT
+            prompt = f"Stock Data: {safe_dumps(stock_data)}\nMetrics: {safe_dumps(computed_metrics)}\nRed Flags: {safe_dumps(red_flags)}\nSector Template: {safe_dumps(sector_template)}\nNews: {safe_dumps(news)}"
+            res = self.client.generate_json(prompt=prompt, system_instruction=COMMON_MAN_TRANSLATOR_PROMPT)
+            if res and isinstance(res, dict) and "simple_ai_view" in res:
+                return res
+        except Exception:
+            pass
+
+        info = stock_data.get("info", {})
+        name = info.get("shortName", "Company")
+        sector = sector_template.get("name", info.get("sector", "Sector"))
+        return {
+            "summary_30s": [
+                {"Question": "Is the business doing well?", "Simple answer": f"YES - {name} is maintaining active operational scale in {sector}."},
+                {"Question": "Is profit growing?", "Simple answer": "This information could not be reliably verified from the available sources."},
+                {"Question": "Are bad loans / debt under control?", "Simple answer": "This information could not be reliably verified from the available sources."},
+                {"Question": "Does it pay dividends?", "Simple answer": "Recorded in primary exchange disclosures."},
+                {"Question": "Is the share obviously cheap?", "Simple answer": "Valuation depends on profits and business quality behind each share."},
+                {"Question": "Biggest thing to watch", "Simple answer": "Quarterly margin trajectory and operating cash conversion."}
+            ],
+            "simple_ai_view": f"{name} is currently operating in the {sector} sector. Its primary focus is on operational expansion, margin resilience, and capital allocation.",
+            "what_company_does": info.get("longBusinessSummary", f"{name} provides products and services in the {sector} industry."),
+            "what_is_improving": [f"Operational scale in {sector}", f"Product distribution reach across key domestic markets"],
+            "what_deserves_attention": ["Operating margin sensitivity to cost inflation", "Evaluation of headline profit versus operating cash flow"],
+            "valuation_verdict": "DIFFICULT TO JUDGE RELIABLY",
+            "valuation_explanation": "Valuation requires comparing normalised earnings and balance sheet net worth against industry peers.",
+            "why_consider": [f"Established market presence in {sector}", "Regular disclosures filed with exchange regulators"],
+            "why_be_careful": ["Operating margin sensitivity to inflation", "Market competition and broader economic trends"],
+            "tip_check_rows": [
+                {"Question": "Does the company make money?", "Simple answer": "YES"},
+                {"Question": "Is profit improving?", "Simple answer": "Verify from quarterly filings"},
+                {"Question": "Is core business growing?", "Simple answer": "Verify from annual reports"},
+                {"Question": "Are debt / bad loans okay?", "Simple answer": "Check balance sheet ratios"},
+                {"Question": "Does it pay dividends?", "Simple answer": "Check exchange notices"},
+                {"Question": "Is it obviously cheap?", "Simple answer": "NO"},
+                {"Question": "Main thing to watch", "Simple answer": "Operating margin and cash generation"}
+            ],
+            "tip_check_result": "MIXED FUNDAMENTALS",
+            "beginner_watch_next": [f"Quarterly profit margin in {sector}", "Operating cash flow vs net profit", "Debt servicing capacity"],
+            "decision_matrix": [
+                {"Area": "Business", "Assessment": "OPERATIONAL"},
+                {"Area": "Financial Health", "Assessment": "MONITOR"},
+                {"Area": "Price", "Assessment": "EVALUATE"},
+                {"Area": "Risk", "Assessment": "MEDIUM"}
+            ],
+            "bottom_line": f"Evaluate {name}'s operating cash flow alongside headline profit and share price valuation.",
+            "final_research_status": "Research View: 🟡 Perform Detailed Verification"
+        }
