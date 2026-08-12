@@ -352,13 +352,26 @@ def render_common_man_view(dossier: dict):
         dividend_history=dividend_history
     )
     
-    # Merge AI report outputs with empirical verdicts if available
+    # Merge AI report outputs with empirical verdicts (Deterministic Facts + AI Beginner Language Translation)
     ai_cm_report = modules.get("common_man_report", {})
     cm_report = dict(empirical_cm)
-    if isinstance(ai_cm_report, dict) and ai_cm_report.get("simple_ai_view"):
-        cm_report["simple_ai_view"] = ai_cm_report["simple_ai_view"]
+    if isinstance(ai_cm_report, dict) and len(ai_cm_report) > 0:
+        if ai_cm_report.get("simple_ai_view"):
+            cm_report["simple_ai_view"] = ai_cm_report["simple_ai_view"]
         if ai_cm_report.get("what_company_does"):
             cm_report["what_company_does"] = ai_cm_report["what_company_does"]
+        if ai_cm_report.get("what_is_improving") and isinstance(ai_cm_report["what_is_improving"], list) and len(ai_cm_report["what_is_improving"]) > 0:
+            cm_report["what_is_improving"] = ai_cm_report["what_is_improving"]
+        if ai_cm_report.get("what_deserves_attention") and isinstance(ai_cm_report["what_deserves_attention"], list) and len(ai_cm_report["what_deserves_attention"]) > 0:
+            cm_report["what_deserves_attention"] = ai_cm_report["what_deserves_attention"]
+        if ai_cm_report.get("valuation_explanation"):
+            cm_report["valuation_explanation"] = ai_cm_report["valuation_explanation"]
+        if ai_cm_report.get("why_consider") and isinstance(ai_cm_report["why_consider"], list) and len(ai_cm_report["why_consider"]) > 0:
+            cm_report["why_consider"] = ai_cm_report["why_consider"]
+        if ai_cm_report.get("why_be_careful") and isinstance(ai_cm_report["why_be_careful"], list) and len(ai_cm_report["why_be_careful"]) > 0:
+            cm_report["why_be_careful"] = ai_cm_report["why_be_careful"]
+        if ai_cm_report.get("beginner_watch_next") and isinstance(ai_cm_report["beginner_watch_next"], list) and len(ai_cm_report["beginner_watch_next"]) > 0:
+            cm_report["beginner_watch_next"] = ai_cm_report["beginner_watch_next"]
 
     cur_price = price_data.get("current_price", 0)
     div_yield = info.get("dividendYield", 0) or 0
