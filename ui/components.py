@@ -144,18 +144,27 @@ def render_investor_questions(questions: list[str]):
 
 
 def render_view_toggle() -> str:
-    """Simple View / Analyst View toggle with crisp white background."""
+    """3-Way Toggle for Research Perspectives (Common Man View, Simple View 26 Sections, Analyst View)."""
     st.markdown("""
     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.75rem 1.25rem; margin: 1.25rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
     """, unsafe_allow_html=True)
     view = st.radio(
         "Select Research Perspective:",
-        ["Simple View (Common Man)", "Analyst View (Detailed Ratios & Financials)"],
+        [
+            "🟢 Common Man View (PDF Report)",
+            "📊 Simple View (26 Research Sections)",
+            "📈 Analyst View (Detailed Ratios & Financials)"
+        ],
         horizontal=True,
         key="view_mode_radio"
     )
     st.markdown("</div>", unsafe_allow_html=True)
-    return "Simple" if "Simple" in view else "Analyst"
+    if "Common Man" in view:
+        return "CommonMan"
+    elif "26 Research Sections" in view:
+        return "Simple"
+    else:
+        return "Analyst"
 
 
 def render_disclaimer():

@@ -270,7 +270,10 @@ def _render_dossier():
     st.session_state.view_mode = view_mode
 
     # ── Render View ───────────────────────────────────────
-    if view_mode == "Simple":
+    if view_mode == "CommonMan":
+        from ui.common_man_view import render_common_man_view
+        render_common_man_view(dossier)
+    elif view_mode == "Simple":
         from ui.simple_view import render_simple_view
         render_simple_view(dossier)
     else:
