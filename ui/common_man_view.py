@@ -458,6 +458,13 @@ def render_common_man_view(dossier: dict):
     computed = modules.get("computed_metrics", {})
     red_flags = modules.get("red_flags", [])
     profile = modules.get("company_snapshot", {})
+    sector_name = (
+        profile.get("sector")
+        or info.get("sector")
+        or info.get("industry")
+        or "Industry"
+    )
+
     # Extract single unified dividend history
     dividend_history = modules.get("dividends", [])
     if isinstance(dividend_history, dict) and "dividends" in dividend_history:
