@@ -288,5 +288,5 @@ Analyze this section's data and explain how it supports or contradicts the centr
     except Exception as e:
         logger.warning(f"Section interpretation failed for {section_name}: {e}")
         
-    # Fallback rule-based interpretation
-    return f"Based on the provided data for {section_name}, the section aligns with the overall archetype of {ctso.get('archetype', 'Unknown')}."
+    # Fallback rule-based interpretation (Never invent plausible-sounding claims)
+    return "This information could not be reliably verified from the available sources."

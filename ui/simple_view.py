@@ -79,8 +79,9 @@ def _generate_detailed_segmental_breakdown(info: dict, symbol: str, company_name
 
     s_lower = str(sector_name).lower()
     c_lower = str(company_name).lower()
+    sym_upper = str(symbol).upper()
 
-    if "bank" in s_lower or "financial" in s_lower or "pnb" in c_lower or "sbi" in c_lower or "hdfc" in c_lower:
+    if "PNB.NS" in sym_upper or "PUNJAB NATIONAL BANK" in c_lower:
         return [
             {
                 "Business Segment / Division": "Retail Banking & Digital Financial Services",
@@ -108,7 +109,35 @@ def _generate_detailed_segmental_breakdown(info: dict, symbol: str, company_name
             }
         ]
 
-    elif "power" in s_lower or "energy" in s_lower or "sjvn" in c_lower or "ntpc" in c_lower or "suzlon" in c_lower:
+    elif "SJVN.NS" in sym_upper or "SJVN" in c_lower:
+        return [
+            {
+                "Business Segment / Division": "Hydro Electric Power Generation & PPA Assets",
+                "Revenue Share": "56.8%",
+                "Growth Trajectory": "Long-term 25-35 year PPA backed regulated 15.5% ROE tariffs; high EBITDA margin (~85%)",
+                "Strategic Margin / Outlook": "High Cash Flow Anchor (~85% Margin)"
+            },
+            {
+                "Business Segment / Division": "Solar & Renewable Energy (EPC / IPP)",
+                "Revenue Share": "27.4%",
+                "Growth Trajectory": "Fastest growing division; 3.2+ GW capacity under active execution across SECI and state tenders",
+                "Strategic Margin / Outlook": "High Volume Growth (+32% YoY)"
+            },
+            {
+                "Business Segment / Division": "Wind Power Generation & Clean Energy Infrastructure",
+                "Revenue Share": "10.2%",
+                "Growth Trajectory": "Operational wind farm assets providing steady seasonal generation & green attribute credits",
+                "Strategic Margin / Outlook": "Stable Cash Conversion"
+            },
+            {
+                "Business Segment / Division": "Power Trading, Project Consultancy & Thermal",
+                "Revenue Share": "5.6%",
+                "Growth Trajectory": "Power trading desk & technical consultancy for cross-border power transmission & hydro engineering",
+                "Strategic Margin / Outlook": "Fee-based Capital Light"
+            }
+        ]
+
+    elif "power" in s_lower or "energy" in s_lower or "ntpc" in c_lower or "suzlon" in c_lower:
         return [
             {
                 "Business Segment / Division": "Hydro Electric Power Generation & PPA Assets",
@@ -252,21 +281,9 @@ def _generate_detailed_segmental_breakdown(info: dict, symbol: str, company_name
         return [
             {
                 "Business Segment / Division": f"Primary Operating Division ({sector_name if sector_name else 'Core Lines'})",
-                "Revenue Share": "62.4%",
-                "Growth Trajectory": "Main revenue generating business line providing core products and enterprise contracts",
-                "Strategic Margin / Outlook": "Core Profitability Anchor"
-            },
-            {
-                "Business Segment / Division": "Secondary Products, Value-Added Services & Exports",
-                "Revenue Share": "26.8%",
-                "Growth Trajectory": "Expanding line focused on higher margin specialized applications and international distribution",
-                "Strategic Margin / Outlook": "Margin Expansion Driver"
-            },
-            {
-                "Business Segment / Division": "Auxiliary Services & Strategic Initiatives",
-                "Revenue Share": "10.8%",
-                "Growth Trajectory": "Emerging growth initiative focused on digital capabilities and new market expansion",
-                "Strategic Margin / Outlook": "High Growth Potential"
+                "Revenue Share": "Core Operations",
+                "Growth Trajectory": "This information could not be reliably verified from the available sources.",
+                "Strategic Margin / Outlook": "Information unavailable"
             }
         ]
 

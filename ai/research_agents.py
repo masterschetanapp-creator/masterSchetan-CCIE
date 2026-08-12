@@ -41,10 +41,7 @@ class ResearchAgents:
         except Exception:
             pass
         
-        info = stock_data.get("info", {})
-        name = info.get("shortName", "The company")
-        sector = info.get("sector", "its operating sector")
-        return f"{name} is a leading enterprise operating in {sector}. The company is currently maintaining steady business operations while focusing on revenue growth, operational efficiency, and capital management."
+        return "This information could not be reliably verified from the available sources."
     
     def generate_company_profile(self, stock_data: dict) -> dict:
         """Generate detailed company profile with history, business model, revenue segments."""
@@ -58,10 +55,12 @@ class ResearchAgents:
 
         info = stock_data.get("info", {})
         return {
-            "history": f"{info.get('longName', 'Company')} has a established market history in India.",
-            "business_model": info.get("longBusinessSummary", "Provides goods and services across key market segments."),
-            "key_products": ["Core Commercial Services", "Retail Products"],
-            "revenue_segments": ["Domestic Operations", "Institutional Clients"]
+            "status": "unavailable",
+            "reason": "AI analysis could not be completed",
+            "history": "This information could not be reliably verified from the available sources.",
+            "business_model": info.get("longBusinessSummary", "This information could not be reliably verified from the available sources."),
+            "key_products": [],
+            "revenue_segments": []
         }
 
     def generate_strengths_weaknesses(self, stock_data: dict, metrics: dict, flags: list) -> dict:
@@ -76,8 +75,10 @@ class ResearchAgents:
             pass
 
         return {
-            "strengths": ["Large market franchise and customer base", "Established operating history", "Healthy capital position"],
-            "weaknesses": ["Operating margin sensitivity to cost inflation", "Macroeconomic demand dependency"]
+            "status": "unavailable",
+            "reason": "AI analysis could not be completed",
+            "strengths": [],
+            "weaknesses": []
         }
     
     def generate_risk_assessment(self, stock_data: dict, metrics: dict) -> dict:
@@ -91,10 +92,12 @@ class ResearchAgents:
             pass
 
         return {
-            "operational": ["Cost inflation pressure on operating margins"],
-            "financial": ["Fluctuations in working capital cycle"],
-            "market": ["Competitive pressure from peer industry participants"],
-            "regulatory": ["Changes in domestic tax, trade or regulatory policies"]
+            "status": "unavailable",
+            "reason": "AI analysis could not be completed",
+            "operational": [],
+            "financial": [],
+            "market": [],
+            "regulatory": []
         }
 
     def generate_future_outlook(self, stock_data: dict, news: list) -> dict:
@@ -108,9 +111,11 @@ class ResearchAgents:
             pass
 
         return {
-            "short_term": "Focusing on revenue growth and margin stabilization.",
-            "long_term": "Expanding distribution footprint and digital technology adoption.",
-            "key_catalysts": ["Quarterly volume expansion", "Cost optimization initiatives"]
+            "status": "unavailable",
+            "reason": "AI analysis could not be completed",
+            "short_term": "This information could not be reliably verified from the available sources.",
+            "long_term": "This information could not be reliably verified from the available sources.",
+            "key_catalysts": []
         }
 
     def generate_simple_explanations(self, metrics: dict) -> dict:
@@ -204,10 +209,12 @@ class ResearchAgents:
         except Exception as e:
             logger.error(f"Error in generate_common_man_report AI execution: {e}")
 
-        # Fallback to empirical builder if AI generation is unverified
+        # Strict Fallback (Never invent plausible-sounding facts)
         return {
+            "status": "unavailable",
+            "reason": "AI analysis could not be completed",
             "summary_30s": [
-                {"Question": "Is the business doing well?", "Simple answer": f"This information could not be reliably verified from the available sources."},
+                {"Question": "Is the business doing well?", "Simple answer": "This information could not be reliably verified from the available sources."},
                 {"Question": "Is profit growing?", "Simple answer": "This information could not be reliably verified from the available sources."},
                 {"Question": "Are bad loans / debt under control?", "Simple answer": "This information could not be reliably verified from the available sources."},
                 {"Question": "Does it pay dividends?", "Simple answer": "Recorded in primary exchange disclosures."},
@@ -216,29 +223,16 @@ class ResearchAgents:
             ],
             "simple_ai_view": f"{c_name} is currently operating in the {sector} sector. This information could not be reliably verified from the available sources.",
             "what_company_does": info.get("longBusinessSummary", "This information could not be reliably verified from the available sources."),
-            "what_is_improving": ["Topline expansion trajectory", "Product distribution reach"],
-            "what_deserves_attention": ["Operating margin sensitivity", "Headline profit versus operating cash flow"],
+            "what_is_improving": [],
+            "what_deserves_attention": [],
             "valuation_verdict": "DIFFICULT TO JUDGE RELIABLY",
             "valuation_explanation": "This information could not be reliably verified from the available sources.",
-            "why_consider": [f"Established market presence in {sector}", "Regular disclosures filed with exchange regulators"],
-            "why_be_careful": ["Operating margin sensitivity to inflation", "Market competition and broader economic trends"],
-            "tip_check_rows": [
-                {"Question": "Does the company make money?", "Simple answer": "Verify from primary filings"},
-                {"Question": "Is profit improving?", "Simple answer": "Verify from quarterly filings"},
-                {"Question": "Is core business growing?", "Simple answer": "Verify from annual reports"},
-                {"Question": "Are debt / bad loans okay?", "Simple answer": "Check balance sheet ratios"},
-                {"Question": "Does it pay dividends?", "Simple answer": "Check exchange notices"},
-                {"Question": "Is it obviously cheap?", "Simple answer": "NO"},
-                {"Question": "Main thing to watch", "Simple answer": "Operating margin and cash generation"}
-            ],
+            "why_consider": [],
+            "why_be_careful": [],
+            "tip_check_rows": [],
             "tip_check_result": "NOT ENOUGH VERIFIED INFORMATION",
-            "beginner_watch_next": [f"Quarterly profit margin in {sector}", "Operating cash flow vs net profit", "Debt servicing capacity"],
-            "decision_matrix": [
-                {"Area": "Business", "Assessment": "UNCLEAR"},
-                {"Area": "Financial Health", "Assessment": "MONITOR"},
-                {"Area": "Price", "Assessment": "UNCLEAR"},
-                {"Area": "Risk", "Assessment": "MEDIUM"}
-            ],
-            "bottom_line": f"This information could not be reliably verified from the available sources.",
+            "beginner_watch_next": [],
+            "decision_matrix": [],
+            "bottom_line": "This information could not be reliably verified from the available sources.",
             "final_research_status": "Research View: ⚪ Not Enough Verified Information"
         }
