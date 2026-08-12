@@ -265,18 +265,22 @@ def _render_dossier():
         dossier.get("modules", {}).get("price_data", {})
     )
 
-    # ── View Toggle ───────────────────────────────────────
-    view_mode = render_view_toggle()
-    st.session_state.view_mode = view_mode
+    # ── 3 Research Perspective Tabs ────────────────────────
+    tab1, tab2, tab3 = st.tabs([
+        "🟢 Common Man View (PDF Report)",
+        "📊 Simple View (26 Research Sections)",
+        "📈 Analyst View (Detailed Ratios & Financials)"
+    ])
 
-    # ── Render View ───────────────────────────────────────
-    if view_mode == "CommonMan":
+    with tab1:
         from ui.common_man_view import render_common_man_view
         render_common_man_view(dossier)
-    elif view_mode == "Simple":
+
+    with tab2:
         from ui.simple_view import render_simple_view
         render_simple_view(dossier)
-    else:
+
+    with tab3:
         from ui.analyst_view import render_analyst_view
         render_analyst_view(dossier)
 

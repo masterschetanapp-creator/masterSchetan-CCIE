@@ -274,6 +274,34 @@ tr:hover td {
         color: #0f172a !important;
     }
 }
+
+/* Streamlit Tabs Custom Styling */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background-color: #f8fafc;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 1.5rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    height: 48px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    color: #475569;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0 1.25rem;
+    border: 1px solid #e2e8f0;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25);
+}
 """
 
 def inject_custom_css():
