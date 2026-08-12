@@ -42,10 +42,14 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
     tip check results, decision support matrix, and bottom line summary based strictly on empirical financial figures.
     Prevents any hard-coded static verdicts for loss-making or high-debt stocks.
     """
+    from data.sector_templates import classify_company_type
+
     m_prof = computed.get("profitability", {}) if isinstance(computed.get("profitability"), dict) else {}
     m_grow = computed.get("growth", {}) if isinstance(computed.get("growth"), dict) else {}
     m_val = computed.get("valuation", {}) if isinstance(computed.get("valuation"), dict) else {}
-    m_debt = computed.get("debt", {}) if isinstance(computed.get("debt"), dict) else {}
+    m_debt = computed.get("debt_metrics", {}) or computed.get("debt", {})
+    if not isinstance(m_debt, dict):
+        m_debt = {}
     
     roe_val = m_prof.get("roe", {}).get("value") if isinstance(m_prof.get("roe"), dict) else None
     op_margin_val = m_prof.get("operating_margin", {}).get("value") if isinstance(m_prof.get("operating_margin"), dict) else None
@@ -64,9 +68,9 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
     cur_price = price_data.get("current_price", 0)
     net_income = info.get("netIncomeToCommon") or info.get("trailingEps")
        
-    # Check if entity is a Bank / Financial Institution
-    sec_ind_text = f"{sector_name} {info.get('industry', '')} {company_name} {symbol}".lower()
-    is_bank = any(k in sec_ind_text for k in ["bank", "pnb", "sbin", "hdfc", "icici", "axis", "kotak", "canbk", "unionbank", "bankbaroda", "indusind"])
+    # Check canonical company_type classification
+    company_type = classify_company_type(sector_name, info.get("industry", ""), company_name, symbol)
+    is_bank = (company_type == "BANK")
 
     # For banks, corporate Debt-to-Equity is NOT a risk metric (Assets/Equity ~10x is normal operating leverage)
     effective_de_val = None if is_bank else de_val

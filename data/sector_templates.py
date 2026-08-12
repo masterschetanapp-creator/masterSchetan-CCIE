@@ -116,11 +116,10 @@ SECTOR_METRICS: dict[str, dict] = {
     }
 }
 
-def classify_sector(sector: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> dict:
+def classify_company_type(sector: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> str:
     """
-    Normalizes sector + industry + company_name + symbol into a canonical company_type,
-    mapping to the correct SECTOR_METRICS template.
-    Guarantees no silent fallthrough to {} for banks, autos, IT, pharma, power, capital goods, metals, real estate, FMCG.
+    Normalizes sector + industry + company_name + symbol into a canonical company_type string code.
+    Returns one of: "BANK", "NBFC", "INSURANCE", "AUTO", "IT", "PHARMA", "UTILITIES", "CAPITAL_GOODS", "METALS", "REAL_ESTATE", "FMCG", or "DEFAULT".
     """
     s_lower = str(sector or "").lower()
     i_lower = str(industry or "").lower()
@@ -132,55 +131,69 @@ def classify_sector(sector: str = "", industry: str = "", company_name: str = ""
     # 1. Banking & Finance
     if any(k in text for k in ["bank", "pnb", "sbi", "hdfcbank", "icicibank", "axisbank", "kotakbank", "canbk", "unionbank", "bankbaroda", "indusindbk"]):
         if "nbfc" in text or "housing" in i_lower or "lending" in i_lower:
-            return SECTOR_METRICS["nbfc"]
-        return SECTOR_METRICS["banks"]
+            return "NBFC"
+        return "BANK"
     elif any(k in text for k in ["nbfc", "asset management", "brokerage", "financial services", "chola", "shriram", "muthoot", "bajfinance", "jiofin", "lic"]):
         if "insurance" in i_lower or "life" in i_lower or "general insurance" in i_lower:
-            return SECTOR_METRICS["insurance"]
-        return SECTOR_METRICS["nbfc"]
+            return "INSURANCE"
+        return "NBFC"
     elif "insurance" in text:
-        return SECTOR_METRICS["insurance"]
+        return "INSURANCE"
 
     # 2. Automotive & Transportation
     if any(k in text for k in ["auto", "car", "vehicle", "truck", "motor", "maruti", "tatamotors", "tmpv", "tmcv", "mahindra", "m&m", "bajaj-auto", "eicher", "heromotoco", "tvsmotor", "ashokley"]):
-        return SECTOR_METRICS["auto"]
+        return "AUTO"
 
     # 3. IT & Tech
     if any(k in text for k in ["it services", "software", "technology", "tcs", "infosys", "wipro", "hcltech", "techm", "ltim", "persistent", "coforge", "mphasis"]):
-        return SECTOR_METRICS["it"]
+        return "IT"
 
     # 4. Pharma & Healthcare
     if any(k in text for k in ["pharma", "drug", "biotech", "healthcare", "hospital", "sunpharma", "cipla", "drreddy", "divislab", "lupin", "mankind"]):
-        return SECTOR_METRICS["pharma"]
+        return "PHARMA"
 
     # 5. Utilities, Power & Renewable Energy
     if any(k in text for k in ["power", "utility", "electric", "renewable", "hydro", "solar", "wind", "sjvn", "tatapower", "ntpc", "nhpc", "powergrid", "suzlon", "ireda"]):
-        return SECTOR_METRICS["utilities"]
+        return "UTILITIES"
 
     # 6. Capital Goods, Defense & EPC
     if any(k in text for k in ["capital goods", "machinery", "engineering", "defense", "shipbuilder", "railway", "bhel", "hal", "bel", "mazdock", "cochinship", "lt", "larsen", "rvnl", "irfc"]):
-        return SECTOR_METRICS["capital_goods"]
+        return "CAPITAL_GOODS"
 
     # 7. Metals & Mining
     if any(k in text for k in ["metal", "steel", "aluminium", "mining", "copper", "iron", "tatasteel", "jswsteel", "hindalco", "vedanta", "nmdc", "sail"]):
-        return SECTOR_METRICS["metals"]
+        return "METALS"
 
     # 8. Real Estate & Construction
     if any(k in text for k in ["real estate", "realty", "property", "construction", "dlf", "godrejprop", "oberoirealty", "macrotech", "nbcc"]):
-        return SECTOR_METRICS["real_estate"]
+        return "REAL_ESTATE"
 
     # 9. FMCG & Consumer Goods
     if any(k in text for k in ["fmcg", "consumer goods", "packaged food", "personal care", "hul", "itc", "nestle", "britannia", "dabur", "marico", "colpal"]):
-        return SECTOR_METRICS["fmcg"]
+        return "FMCG"
 
-    # Keyword fallbacks
-    for key, template in SECTOR_METRICS.items():
-        if key in text:
-            return template
-
-    return SECTOR_METRICS["capital_goods"]
+    return "DEFAULT"
 
 
-def get_sector_template(sector_key: str, industry: str = "", company_name: str = "", symbol: str = "") -> dict:
-    """Return the sector template using the full sector classifier."""
-    return classify_sector(sector_key, industry, company_name, symbol)
+def get_sector_template(company_type: str) -> dict:
+    """Return the sector template dictionary for a canonical company_type string code."""
+    mapping = {
+        "BANK": SECTOR_METRICS["banks"],
+        "NBFC": SECTOR_METRICS["nbfc"],
+        "INSURANCE": SECTOR_METRICS["insurance"],
+        "AUTO": SECTOR_METRICS["auto"],
+        "IT": SECTOR_METRICS["it"],
+        "PHARMA": SECTOR_METRICS["pharma"],
+        "UTILITIES": SECTOR_METRICS["utilities"],
+        "CAPITAL_GOODS": SECTOR_METRICS["capital_goods"],
+        "METALS": SECTOR_METRICS["metals"],
+        "REAL_ESTATE": SECTOR_METRICS["real_estate"],
+        "FMCG": SECTOR_METRICS["fmcg"]
+    }
+    return mapping.get(company_type.upper(), SECTOR_METRICS["capital_goods"])
+
+
+def classify_sector(sector: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> dict:
+    """Convenience wrapper returning the template dictionary."""
+    company_type = classify_company_type(sector, industry, company_name, symbol)
+    return get_sector_template(company_type)

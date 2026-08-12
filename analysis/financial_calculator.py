@@ -331,7 +331,7 @@ def calculate_cash_flow_quality(cashflow: Dict[str, Any], income_stmt: Dict[str,
     return result
 
 
-from data.sector_templates import classify_sector
+from data.sector_templates import classify_company_type
 
 
 def calculate_all_metrics(financial_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -344,7 +344,7 @@ def calculate_all_metrics(financial_data: Dict[str, Any]) -> Dict[str, Any]:
     name = info.get('longName') or info.get('shortName', '')
     symbol = info.get('symbol', '')
 
-    company_type = classify_sector(sector, industry, name, symbol)
+    company_type = classify_company_type(sector, industry, name, symbol)
     is_bank = (company_type == "BANK")
 
     # Get structured yearly lists
