@@ -212,27 +212,15 @@ def _run_research(stock_info: dict):
 
 
 def _render_welcome_screen():
-    """Render welcome screen with quick stock selection buttons."""
-    st.markdown("<h3 style='text-align: center; margin-top: 2rem; color: #0f172a;'>Or choose a featured Indian stock:</h3>", unsafe_allow_html=True)
-
-    popular_stocks = [
-        {"name": "Punjab National Bank", "symbol": "PNB.NS"},
-        {"name": "Suzlon Energy", "symbol": "SUZLON.NS"},
-        {"name": "Larsen & Toubro", "symbol": "LT.NS"},
-        {"name": "Reliance Industries", "symbol": "RELIANCE.NS"},
-        {"name": "Tata Consultancy Services", "symbol": "TCS.NS"},
-        {"name": "State Bank of India", "symbol": "SBIN.NS"},
-        {"name": "HDFC Bank", "symbol": "HDFCBANK.NS"},
-        {"name": "Sun Pharma", "symbol": "SUNPHARMA.NS"},
-    ]
-
-    cols = st.columns(4)
-    for idx, stock in enumerate(popular_stocks):
-        with cols[idx % 4]:
-            if st.button(f"📊 {stock['name']}", key=f"popular_{idx}", use_container_width=True):
-                st.session_state.selected_stock = stock
-                st.session_state.search_triggered = True
-                st.rerun()
+    """Render clean welcome screen banner."""
+    st.markdown("""
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; border-radius: 12px; padding: 2rem; margin: 2rem 0; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+        <h3 style="color: #0f172a; margin-top: 0; font-size: 1.4rem;">📊 Instant Multi-Model Equity Intelligence Engine</h3>
+        <p style="color: #475569; font-size: 1rem; max-width: 700px; margin: 0.5rem auto 0 auto; line-height: 1.6;">
+            Search any BSE or NSE listed stock in the search bar above to generate a complete 26-section AI research dossier, including 15-point forensic red flags, central investment thesis, and audited multi-year financials.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def _render_dossier():
