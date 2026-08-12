@@ -272,10 +272,11 @@ def clean_search_term(query: str) -> str:
 
 def search_stocks(query: str) -> List[Dict[str, str]]:
     """
-    Search stocks using 3-tier lookup:
-    1. Exact & Substring match in 300+ COMMON_STOCKS
-    2. Fuzzy match using difflib
-    3. Dynamic yfinance.Search query for ANY of the 2,000+ listed NSE/BSE equities
+    Search stocks using 4-tier lookup:
+    1. Exact match in 300+ COMMON_STOCKS
+    2. Direct ticker check on Yahoo Finance (e.g. IDBI.NS, MRF.NS, BOSCHLTD.NS)
+    3. Substring match in COMMON_STOCKS
+    4. Dynamic yfinance.Search query for ANY of the 2,000+ listed NSE/BSE equities
     """
     if not query or len(query.strip()) < 2:
         return []
@@ -301,7 +302,36 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
         results.append(s)
         seen_syms.add(s["symbol"])
 
-    # 2. Substring containment match in COMMON_STOCKS keys and full names
+    # 2. Direct Ticker Check on yfinance for untracked symbols (e.g. IDBI.NS)
+    if not results:
+        for root in [no_space_q, query_upper]:
+            if not root:
+                continue
+            for suffix in [".NS", ".BO"]:
+                sym = root + suffix
+                if sym in seen_syms:
+                    continue
+                try:
+                    t = yf.Ticker(sym)
+                    h = t.history(period="1d")
+                    if not h.empty:
+                        info = getattr(t, "info", {}) or {}
+                        raw_name = info.get("shortName") or info.get("longName") or root
+                        clean_name = re.sub(r'\b(LTD|LIMITED|INC|CORP)\b', '', str(raw_name), flags=re.I).strip()
+                        if not clean_name:
+                            clean_name = root
+                        s_obj = {
+                            "symbol": sym,
+                            "name": f"{clean_name.title()} Limited",
+                            "exchange": "NSE" if ".NS" in sym else "BSE"
+                        }
+                        results.append(s_obj)
+                        seen_syms.add(sym)
+                        break
+                except Exception:
+                    pass
+
+    # 3. Substring containment match in COMMON_STOCKS keys and full names
     for key, stock in COMMON_STOCKS.items():
         if stock["symbol"] in seen_syms:
             continue
@@ -310,17 +340,6 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
             seen_syms.add(stock["symbol"])
             if len(results) >= 5:
                 break
-
-    # 3. Fuzzy close match if fewer than 3 results
-    if len(results) < 3:
-        matches = difflib.get_close_matches(clean_q, COMMON_STOCKS.keys(), n=5, cutoff=0.30)
-        for match in matches:
-            stock = COMMON_STOCKS[match]
-            if stock["symbol"] not in seen_syms:
-                results.append(stock)
-                seen_syms.add(stock["symbol"])
-                if len(results) >= 5:
-                    break
 
     # 4. Dynamic yfinance.Search API for 100% BSE & NSE stock coverage
     if len(results) < 3:
@@ -331,7 +350,7 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
                 sym = q.get("symbol", "")
                 if (".NS" in sym or ".BO" in sym) and sym not in seen_syms:
                     raw_name = q.get("shortname") or q.get("longname") or sym.replace(".NS", "").replace(".BO", "")
-                    clean_name = re.sub(r'\b(LTD|LIMITED|INC|CORP)\b', '', raw_name, flags=re.I).strip()
+                    clean_name = re.sub(r'\b(LTD|LIMITED|INC|CORP)\b', '', str(raw_name), flags=re.I).strip()
                     if not clean_name:
                         clean_name = sym.replace(".NS", "").replace(".BO", "")
                     
@@ -351,47 +370,51 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
 
 def resolve_stock(query: str) -> Optional[Dict[str, str]]:
     """Master entity resolver supporting partial, full, and suffix-laden search queries."""
-    if not query:
+    if not query or len(query.strip()) < 2:
         return None
         
     query_upper = query.upper().strip()
     clean_q = clean_search_term(query)
-    
-    # 1. First check search_stocks candidates
-    candidates = search_stocks(query)
-    if candidates:
-        return candidates[0]
+    no_space_q = clean_q.replace(" ", "").replace("&", "")
 
-    # 2. Dynamic candidate ticker verification
-    no_space_query = clean_q.replace(" ", "").replace("&", "")
-    orig_no_space = query_upper.replace(" ", "").replace("&", "")
-    
-    candidate_roots = [no_space_query, clean_q, orig_no_space, query_upper]
-    seen_syms = set()
+    # 1. Exact match in COMMON_STOCKS
+    if query_upper in COMMON_STOCKS:
+        return COMMON_STOCKS[query_upper]
+    if clean_q in COMMON_STOCKS:
+        return COMMON_STOCKS[clean_q]
+    if no_space_q in COMMON_STOCKS:
+        return COMMON_STOCKS[no_space_q]
 
-    for root in candidate_roots:
+    # 2. Priority Direct Ticker Check on yfinance (e.g. IDBI.NS, MRF.NS, BOSCHLTD.NS)
+    for root in [no_space_q, query_upper]:
         if not root:
             continue
         for suffix in [".NS", ".BO"]:
             sym = root + suffix
-            if sym in seen_syms:
-                continue
-            seen_syms.add(sym)
             try:
-                ticker = yf.Ticker(sym)
-                hist = ticker.history(period="1d")
-                if not hist.empty:
-                    name_resolved = sym.replace(".NS", "").replace(".BO", "")
+                t = yf.Ticker(sym)
+                h = t.history(period="1d")
+                if not h.empty:
+                    info = getattr(t, "info", {}) or {}
+                    raw_name = info.get("shortName") or info.get("longName") or root
+                    clean_name = re.sub(r'\b(LTD|LIMITED|INC|CORP)\b', '', str(raw_name), flags=re.I).strip()
+                    if not clean_name:
+                        clean_name = root
                     return {
                         "symbol": sym,
-                        "name": f"{name_resolved} Limited",
+                        "name": f"{clean_name.title()} Limited",
                         "exchange": "NSE" if ".NS" in sym else "BSE"
                     }
             except Exception:
-                continue
+                pass
 
-    # Fallback to default NSE symbol
-    fallback_sym = f"{no_space_query}.NS"
+    # 3. Search candidates from search_stocks
+    candidates = search_stocks(query)
+    if candidates:
+        return candidates[0]
+
+    # 4. Fallback to default NSE symbol
+    fallback_sym = f"{no_space_q}.NS"
     return {
         "symbol": fallback_sym,
         "name": f"{clean_q.title()} Limited",

@@ -127,21 +127,24 @@ def _render_header():
 
 
 def _render_search():
-    """Render the stock search interface."""
+    """Render the stock search interface with automatic Enter key trigger."""
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
-        st.markdown("<p style='text-align: center; color: #0f172a; font-weight: 600; font-size: 1.1rem;'>Enter any Indian stock name (e.g., PNB, Reliance, TCS, HDFC Bank, SBI)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #0f172a; font-weight: 600; font-size: 1.1rem;'>Enter any Indian stock name (e.g., IDBI, PNB, Reliance, TCS, HDFC Bank, SBI)</p>", unsafe_allow_html=True)
 
         query = st.text_input(
             "Search",
-            placeholder="Search BSE / NSE stock name or ticker...",
+            placeholder="Type any BSE / NSE stock name or ticker (e.g. IDBI, SJVN, Tata)...",
             label_visibility="collapsed",
             key="stock_search"
         )
 
-        if query and len(query) >= 2:
+        if query and len(query.strip()) >= 2:
             from core.entity_resolver import resolve_stock, search_stocks
-            suggestions = search_stocks(query)
+            suggestions = search_stocks(query.strip())
+            resolved = resolve_stock(query.strip())
+
+            stock_to_run = None
 
             if suggestions:
                 options = [f"{s['name']} ({s['symbol']})" for s in suggestions]
@@ -150,33 +153,30 @@ def _render_search():
                     options=options,
                     key="stock_select"
                 )
+                idx = options.index(selected_option)
+                stock_to_run = suggestions[idx]
+            elif resolved:
+                stock_to_run = resolved
+                st.markdown(f"""
+                <div style="background: #ffffff; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #2563eb; margin-bottom: 0.5rem; text-align: center; color: #0f172a;">
+                    <strong>{resolved['name']}</strong> · {resolved['symbol']} ({resolved['exchange']})
+                </div>
+                """, unsafe_allow_html=True)
 
-                if st.button("🔍 Generate Complete AI Equity Research Report", type="primary", use_container_width=True):
-                    idx = options.index(selected_option)
-                    st.session_state.selected_stock = suggestions[idx]
+            if stock_to_run:
+                btn_clicked = st.button("🔍 Generate Complete AI Equity Research Report", type="primary", use_container_width=True, key="btn_run_research")
+                query_changed = st.session_state.get("last_auto_query") != query.strip()
+
+                if btn_clicked or query_changed:
+                    st.session_state.last_auto_query = query.strip()
+                    st.session_state.selected_stock = stock_to_run
                     st.session_state.search_triggered = True
                     st.rerun()
 
                 if hasattr(st.session_state, 'selected_stock') and st.session_state.search_triggered:
                     return st.session_state.selected_stock
             else:
-                resolved = resolve_stock(query)
-                if resolved:
-                    st.markdown(f"""
-                    <div style="background: #ffffff; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 0.5rem; text-align: center; color: #0f172a;">
-                        <strong>{resolved['name']}</strong> · {resolved['symbol']}
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    if st.button("🔍 Generate Complete AI Equity Research Report", type="primary", use_container_width=True):
-                        st.session_state.selected_stock = resolved
-                        st.session_state.search_triggered = True
-                        st.rerun()
-
-                    if hasattr(st.session_state, 'selected_stock') and st.session_state.search_triggered:
-                        return st.session_state.selected_stock
-                else:
-                    st.warning(f"Could not resolve '{query}'. Try the full company name or NSE ticker.")
+                st.warning(f"Could not resolve '{query}'. Checking NSE/BSE databases...")
 
     return None
 
