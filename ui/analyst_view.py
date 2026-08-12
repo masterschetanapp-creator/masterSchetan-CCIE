@@ -44,7 +44,7 @@ def render_analyst_view(dossier: dict):
                 st.markdown("<br>", unsafe_allow_html=True)
 
     # ── 2. Financial Statements (Tables) ──────────────────────
-    render_section_header("Financial Statements", "📑", "Audited figures (in ₹ Crore / Lakh)")
+    render_section_header("Financial Statements", "📑", "Financial statement data — secondary aggregation; verify against company filings")
     tab1, tab2, tab3 = st.tabs(["Profit & Loss Statement", "Balance Sheet", "Cash Flow Statement"])
 
     with tab1:

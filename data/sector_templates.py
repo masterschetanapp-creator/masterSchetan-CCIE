@@ -1,6 +1,12 @@
-"""
-Sector-specific metric definitions for specialized analysis.
-"""
+from dataclasses import dataclass
+
+@dataclass
+class CompanyClassification:
+    company_type: str
+    sector: str
+    industry: str
+    confidence: str
+
 
 SECTOR_METRICS: dict[str, dict] = {
     "banks": {
@@ -197,3 +203,15 @@ def classify_sector(sector: str = "", industry: str = "", company_name: str = ""
     """Convenience wrapper returning the template dictionary."""
     company_type = classify_company_type(sector, industry, company_name, symbol)
     return get_sector_template(company_type)
+
+
+def get_company_classification(sector: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> CompanyClassification:
+    """Returns a structured CompanyClassification object."""
+    c_type = classify_company_type(sector, industry, company_name, symbol)
+    conf = "HIGH" if c_type != "DEFAULT" else "MEDIUM"
+    return CompanyClassification(
+        company_type=c_type,
+        sector=sector or "Unknown Sector",
+        industry=industry or "Unknown Industry",
+        confidence=conf
+    )

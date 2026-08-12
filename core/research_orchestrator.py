@@ -168,11 +168,11 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
             source_tracker.add_claim(
                 claim=f"News: {n.get('title', '')[:80]}",
                 value=n.get('source', 'Media'),
-                source=n.get('source', 'Google News RSS'),
-                source_type="Verified News & Corporate Announcements",
-                confidence=80,
-                verification_status="MULTI_SOURCE_VERIFIED",
-                claim_type="EXTERNAL_ESTIMATE",
+                source=n.get('source', 'Google News RSS Aggregator'),
+                source_type="Google News RSS Aggregator",
+                confidence=70,
+                verification_status="SINGLE_SECONDARY",
+                claim_type="MEDIA_REPORT",
                 module="news"
             )
     except Exception as e:

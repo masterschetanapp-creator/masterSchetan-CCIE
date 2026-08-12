@@ -31,16 +31,36 @@ class SourceTracker:
         return [c for c in self.claims if c.get('module') == module]
     
     def get_confidence_summary(self) -> Dict[str, Any]:
-        """Overall confidence score for the dossier."""
+        """Overall confidence score for the dossier derived empirically from evidence status."""
         if not self.claims:
-            return {'average_confidence': 0, 'total_claims': 0}
+            return {'average_confidence': 0, 'total_claims': 0, 'status': 'UNVERIFIED', 'confidence_label': 'UNVERIFIED'}
         
-        avg_confidence = sum(c.get('confidence', 0) for c in self.claims) / len(self.claims)
-        
+        total = len(self.claims)
+        primary_claims = sum(1 for c in self.claims if c.get('verification_status') in ('PRIMARY_VERIFIED', 'DERIVED_FROM_PRIMARY'))
+        secondary_claims = sum(1 for c in self.claims if c.get('verification_status') in ('SECONDARY_ONLY', 'DERIVED_FROM_SECONDARY', 'SINGLE_SECONDARY'))
+        unverified_claims = total - (primary_claims + secondary_claims)
+
+        primary_pct = (primary_claims / total) * 100
+        secondary_pct = (secondary_claims / total) * 100
+        unverified_pct = (unverified_claims / total) * 100
+
+        avg_confidence = sum(c.get('confidence', 0) for c in self.claims) / total
+
+        if primary_pct >= 50:
+            status_label = "HIGH (Primary Exchange / Filing Verified)"
+        elif (primary_claims + secondary_claims) / total >= 0.7:
+            status_label = "MEDIUM (Secondary Aggregator Verified)"
+        else:
+            status_label = "LOW (Unverified / Limited Coverage)"
+
         return {
-            'average_confidence': avg_confidence,
-            'total_claims': len(self.claims),
-            'status': 'High' if avg_confidence >= 85 else ('Medium' if avg_confidence >= 70 else 'Low')
+            'average_confidence': round(avg_confidence, 1),
+            'total_claims': total,
+            'primary_coverage_pct': round(primary_pct, 1),
+            'secondary_coverage_pct': round(secondary_pct, 1),
+            'unverified_pct': round(unverified_pct, 1),
+            'status': status_label,
+            'confidence_label': status_label
         }
     
     def flag_conflict(self, claim1: Dict[str, Any], claim2: Dict[str, Any], resolution: str) -> Dict[str, Any]:
