@@ -373,6 +373,7 @@ def render_simple_view(dossier: dict):
     price_data = modules.get("price_data", {})
     computed = modules.get("computed_metrics", {})
     holders = modules.get("holders", {})
+    red_flags = modules.get("red_flags", [])
 
     sector_template = get_sector_template(sector)
     sector_name = sector_template.get("name", sector)
