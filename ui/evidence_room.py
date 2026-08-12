@@ -115,8 +115,18 @@ def render_evidence_room(source_tracker_data: dict):
                 c_type = item.get("claim_type", "FACT")
                 last_checked = item.get("last_checked", "")[:10] if item.get("last_checked") else "Active"
 
-                ver_color = "#15803d" if ver_status == "PRIMARY_VERIFIED" else "#1d4ed8" if ver_status == "MULTI_SOURCE_VERIFIED" else "#d97706" if ver_status == "SECONDARY_ONLY" else "#dc2626"
-                ver_bg = "#f0fdf4" if ver_status == "PRIMARY_VERIFIED" else "#eff6ff" if ver_status == "MULTI_SOURCE_VERIFIED" else "#fffbe6" if ver_status == "SECONDARY_ONLY" else "#fef2f2"
+                if ver_status == "PRIMARY_VERIFIED":
+                    ver_color, ver_bg = "#15803d", "#f0fdf4"
+                elif ver_status == "DERIVED_FROM_PRIMARY":
+                    ver_color, ver_bg = "#047857", "#ecfdf5"
+                elif ver_status == "DERIVED_FROM_SECONDARY":
+                    ver_color, ver_bg = "#6b21a8", "#faf5ff"
+                elif ver_status == "MULTI_SOURCE_VERIFIED":
+                    ver_color, ver_bg = "#1d4ed8", "#eff6ff"
+                elif ver_status == "SECONDARY_ONLY":
+                    ver_color, ver_bg = "#b45309", "#fffbe6"
+                else:
+                    ver_color, ver_bg = "#dc2626", "#fef2f2"
 
                 type_label_map = {
                     "FACT": "🏷️ FACT",

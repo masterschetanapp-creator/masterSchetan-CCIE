@@ -125,7 +125,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
                 source="Financial Calculator Engine (Python Code)",
                 source_type="Calculated from Yahoo Finance financial-statement data",
                 confidence=95,
-                verification_status="PRIMARY_VERIFIED",
+                verification_status="DERIVED_FROM_SECONDARY",
                 claim_type="CALCULATION",
                 module="financial_calculations"
             )
@@ -146,7 +146,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
                 source="Forensic Audit Engine (Code)",
                 source_type="Automated Quantitative Check",
                 confidence=95,
-                verification_status="PRIMARY_VERIFIED",
+                verification_status="DERIVED_FROM_SECONDARY",
                 claim_type="CALCULATION",
                 module="financial_calculations"
             )

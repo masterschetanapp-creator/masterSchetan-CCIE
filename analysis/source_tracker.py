@@ -7,7 +7,7 @@ class SourceTracker:
     
     def add_claim(self, claim: str, value: Any, source: str, source_type: str,
                   source_date: Optional[str] = None, confidence: int = 90,
-                  verification_status: str = "PRIMARY_VERIFIED",
+                  verification_status: str = "DERIVED_FROM_SECONDARY",
                   claim_type: str = "FACT",
                   module: str = "general") -> Dict[str, Any]:
         """Register a fact with its source, verification status, and claim type."""
