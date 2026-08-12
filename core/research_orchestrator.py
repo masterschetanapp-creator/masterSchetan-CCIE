@@ -193,7 +193,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     # ── Step 10: Sector-specific template ─────────────────────
     update_progress("Loading sector analysis template...", 60)
     sector = info.get("sector", "")
-    sector_template = get_sector_template(sector)
+    industry = info.get("industry", "")
+    sector_template = get_sector_template(sector, industry, company_name, symbol)
     dossier["modules"]["sector_template"] = sector_template
 
     # ── Step 10.5: Generate Central Thesis (CTSO) ─────────────
