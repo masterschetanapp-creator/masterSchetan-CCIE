@@ -5,9 +5,9 @@ class SourceTracker:
     def __init__(self):
         self.claims: List[Dict[str, Any]] = []
     
-    def add_claim(self, claim: str, value: Any, source: str, source_type: str,
-                  source_date: Optional[str] = None, confidence: int = 90,
-                  verification_status: str = "DERIVED_FROM_SECONDARY",
+    def add_claim(self, claim: str, value: Any, source: str = "Source unavailable", source_type: str = "Unverified Feed",
+                  source_date: Optional[str] = None, confidence: int = 0,
+                  verification_status: str = "UNVERIFIED",
                   claim_type: str = "FACT",
                   module: str = "general") -> Dict[str, Any]:
         """Register a fact with its source, verification status, and claim type."""

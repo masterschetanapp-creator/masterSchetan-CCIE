@@ -107,12 +107,12 @@ def render_evidence_room(source_tracker_data: dict):
 
         with st.expander(f"{cat_title} ({len(items)} items)", expanded=True if "Financial" in cat_title else False):
             for item in items:
-                claim_text = item.get("claim_text", item.get("claim", "Verified Fact"))
-                source = item.get("source", "Exchange Primary Filings")
-                source_type = item.get("source_type", "Audited Regulatory Data")
-                confidence = item.get("confidence", 90)
-                ver_status = item.get("verification_status", "PRIMARY_VERIFIED")
-                c_type = item.get("claim_type", "FACT")
+                claim_text = item.get("claim_text") or item.get("claim") or "Unverified Fact"
+                source = item.get("source") or "Source unavailable"
+                source_type = item.get("source_type") or "Unverified Feed"
+                confidence = item.get("confidence") if item.get("confidence") is not None else 0
+                ver_status = item.get("verification_status") or "UNVERIFIED"
+                c_type = item.get("claim_type") or "FACT"
                 last_checked = item.get("last_checked", "")[:10] if item.get("last_checked") else "Active"
 
                 if ver_status == "PRIMARY_VERIFIED":
