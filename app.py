@@ -183,7 +183,7 @@ def _render_search():
                 if hasattr(st.session_state, 'selected_stock') and st.session_state.search_triggered:
                     return st.session_state.selected_stock
             else:
-                st.warning(f"Could not resolve '{query}'. Checking NSE/BSE databases...")
+                st.warning(f"Company '{query}' could not be reliably identified on BSE or NSE. Please check spelling or ticker symbol.")
 
     return None
 

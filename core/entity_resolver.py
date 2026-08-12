@@ -454,10 +454,5 @@ def resolve_stock(query: str) -> Optional[Dict[str, str]]:
     if candidates:
         return candidates[0]
 
-    # 4. Fallback to default NSE symbol
-    fallback_sym = f"{no_space_q}.NS"
-    return {
-        "symbol": fallback_sym,
-        "name": f"{clean_q.title()} Limited",
-        "exchange": "NSE"
-    }
+    # 4. If all verified resolution attempts fail, return None (NEVER manufacture fake symbols!)
+    return None
