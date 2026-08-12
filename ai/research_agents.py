@@ -1,11 +1,15 @@
 import json
+import logging
 from .prompts.system_prompts import (
     COMPANY_PROFILE_PROMPT,
     EXECUTIVE_SUMMARY_PROMPT,
     RISK_ASSESSMENT_PROMPT,
     FUTURE_OUTLOOK_PROMPT,
-    SIMPLE_VIEW_PROMPT
+    SIMPLE_VIEW_PROMPT,
+    COMMON_MAN_TRANSLATOR_PROMPT
 )
+
+logger = logging.getLogger(__name__)
 
 def sanitize(obj):
     if isinstance(obj, dict):
@@ -159,38 +163,67 @@ class ResearchAgents:
         ]
 
     def generate_common_man_report(self, stock_data: dict, computed_metrics: dict, red_flags: list, sector_template: dict, news: list) -> dict:
-        """Generate dynamic, stock-specific Common Man report using COMMON_MAN_TRANSLATOR_PROMPT."""
+        """
+        Executes COMMON_MAN_TRANSLATOR_PROMPT using Multi-Model AI Client to build strict JSON result
+        from the verified evidence dossier.
+        """
+        info = stock_data.get("info", {})
+        c_name = info.get("longName", info.get("shortName", "Company"))
+        symbol = stock_data.get("symbol", info.get("symbol", "TICKER"))
+        sector = sector_template.get("name", info.get("sector", "Sector"))
+        cur_p = stock_data.get("price_data", {}).get("current_price", info.get("currentPrice", 0))
+
+        prompt = f"""
+        COMPANY NAME: {c_name}
+        NSE SYMBOL: {symbol}
+        SECTOR: {sector}
+        CURRENT PRICE: ₹{cur_p}
+        
+        VERIFIED EVIDENCE:
+        {safe_dumps(info)}
+        
+        CALCULATED FINANCIAL METRICS:
+        {safe_dumps(computed_metrics)}
+        
+        15-POINT FORENSIC RED FLAGS:
+        {safe_dumps(red_flags)}
+        
+        SECTOR ANALYSIS TEMPLATE:
+        {safe_dumps(sector_template)}
+        
+        MATERIAL NEWS:
+        {safe_dumps(news[:5] if news else [])}
+        
+        Translate the above verified evidence into a strict JSON Common Man Report according to system instructions.
+        """
+
         try:
-            from .prompts.system_prompts import COMMON_MAN_TRANSLATOR_PROMPT
-            prompt = f"Stock Data: {safe_dumps(stock_data)}\nMetrics: {safe_dumps(computed_metrics)}\nRed Flags: {safe_dumps(red_flags)}\nSector Template: {safe_dumps(sector_template)}\nNews: {safe_dumps(news)}"
             res = self.client.generate_json(prompt=prompt, system_instruction=COMMON_MAN_TRANSLATOR_PROMPT)
             if res and isinstance(res, dict) and "simple_ai_view" in res:
                 return res
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error in generate_common_man_report AI execution: {e}")
 
-        info = stock_data.get("info", {})
-        name = info.get("shortName", "Company")
-        sector = sector_template.get("name", info.get("sector", "Sector"))
+        # Fallback to empirical builder if AI generation is unverified
         return {
             "summary_30s": [
-                {"Question": "Is the business doing well?", "Simple answer": f"YES - {name} is maintaining active operational scale in {sector}."},
+                {"Question": "Is the business doing well?", "Simple answer": f"This information could not be reliably verified from the available sources."},
                 {"Question": "Is profit growing?", "Simple answer": "This information could not be reliably verified from the available sources."},
                 {"Question": "Are bad loans / debt under control?", "Simple answer": "This information could not be reliably verified from the available sources."},
                 {"Question": "Does it pay dividends?", "Simple answer": "Recorded in primary exchange disclosures."},
                 {"Question": "Is the share obviously cheap?", "Simple answer": "Valuation depends on profits and business quality behind each share."},
                 {"Question": "Biggest thing to watch", "Simple answer": "Quarterly margin trajectory and operating cash conversion."}
             ],
-            "simple_ai_view": f"{name} is currently operating in the {sector} sector. Its primary focus is on operational expansion, margin resilience, and capital allocation.",
-            "what_company_does": info.get("longBusinessSummary", f"{name} provides products and services in the {sector} industry."),
-            "what_is_improving": [f"Operational scale in {sector}", f"Product distribution reach across key domestic markets"],
-            "what_deserves_attention": ["Operating margin sensitivity to cost inflation", "Evaluation of headline profit versus operating cash flow"],
+            "simple_ai_view": f"{c_name} is currently operating in the {sector} sector. This information could not be reliably verified from the available sources.",
+            "what_company_does": info.get("longBusinessSummary", "This information could not be reliably verified from the available sources."),
+            "what_is_improving": ["Topline expansion trajectory", "Product distribution reach"],
+            "what_deserves_attention": ["Operating margin sensitivity", "Headline profit versus operating cash flow"],
             "valuation_verdict": "DIFFICULT TO JUDGE RELIABLY",
-            "valuation_explanation": "Valuation requires comparing normalised earnings and balance sheet net worth against industry peers.",
+            "valuation_explanation": "This information could not be reliably verified from the available sources.",
             "why_consider": [f"Established market presence in {sector}", "Regular disclosures filed with exchange regulators"],
             "why_be_careful": ["Operating margin sensitivity to inflation", "Market competition and broader economic trends"],
             "tip_check_rows": [
-                {"Question": "Does the company make money?", "Simple answer": "YES"},
+                {"Question": "Does the company make money?", "Simple answer": "Verify from primary filings"},
                 {"Question": "Is profit improving?", "Simple answer": "Verify from quarterly filings"},
                 {"Question": "Is core business growing?", "Simple answer": "Verify from annual reports"},
                 {"Question": "Are debt / bad loans okay?", "Simple answer": "Check balance sheet ratios"},
@@ -198,14 +231,14 @@ class ResearchAgents:
                 {"Question": "Is it obviously cheap?", "Simple answer": "NO"},
                 {"Question": "Main thing to watch", "Simple answer": "Operating margin and cash generation"}
             ],
-            "tip_check_result": "MIXED FUNDAMENTALS",
+            "tip_check_result": "NOT ENOUGH VERIFIED INFORMATION",
             "beginner_watch_next": [f"Quarterly profit margin in {sector}", "Operating cash flow vs net profit", "Debt servicing capacity"],
             "decision_matrix": [
-                {"Area": "Business", "Assessment": "OPERATIONAL"},
+                {"Area": "Business", "Assessment": "UNCLEAR"},
                 {"Area": "Financial Health", "Assessment": "MONITOR"},
-                {"Area": "Price", "Assessment": "EVALUATE"},
+                {"Area": "Price", "Assessment": "UNCLEAR"},
                 {"Area": "Risk", "Assessment": "MEDIUM"}
             ],
-            "bottom_line": f"Evaluate {name}'s operating cash flow alongside headline profit and share price valuation.",
-            "final_research_status": "Research View: 🟡 Perform Detailed Verification"
+            "bottom_line": f"This information could not be reliably verified from the available sources.",
+            "final_research_status": "Research View: ⚪ Not Enough Verified Information"
         }
