@@ -120,8 +120,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
             source_tracker.add_claim(
                 claim=f"{metric_name} calculated",
                 value=computed_metrics[metric_name],
-                source="Financial Calculator (Code)",
-                source_type="Calculated from audited data",
+                source="Financial Calculator Engine (Python Code)",
+                source_type="Calculated from Yahoo Finance financial-statement data",
                 confidence=95,
                 module="financial_calculations"
             )

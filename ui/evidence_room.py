@@ -14,15 +14,13 @@ def render_evidence_room(source_tracker_data: dict):
             <strong>Provenancial Transparency:</strong> The Evidence Room tracks the origin, primary filing reference, and confidence rating of every quantitative figure and qualitative synthesis presented in this report.
             <br>
             <span style="color: #475569; font-size: 0.85rem;">
-                • <strong>Audited Financials (100%)</strong>: Direct SEBI/BSE/NSE regulatory annual & quarterly filings.
+                • <strong>Calculated Metrics (95%)</strong>: Deterministic Python code execution on Yahoo Finance financial-statement data.
                 <br>
-                • <strong>Calculated Metrics (95%)</strong>: Deterministic Python code execution (zero LLM hallucination).
+                • <strong>Secondary Market Aggregator (85%)</strong>: Stock profiles, prices & shareholding patterns via yfinance API.
                 <br>
-                • <strong>Exchange Disclosures (90%)</strong>: Official promoter shareholding & corporate action records.
+                • <strong>Material News (80%)</strong>: Verified Google News RSS & corporate press releases.
                 <br>
-                • <strong>Material News (80%)</strong>: Verified Google News RSS & regulatory announcements.
-                <br>
-                • <strong>AI Synthesis (75-85%)</strong>: Multi-Model AI thesis synthesis (Gemini 2.5 Flash + Groq + DeepSeek).
+                • <strong>AI Synthesis (75-85%)</strong>: Multi-Model AI research synthesis (Gemini 2.5).
             </span>
         </p>
     </div>
