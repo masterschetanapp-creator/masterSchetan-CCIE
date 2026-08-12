@@ -170,37 +170,123 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         div_status = "NO VERIFIED RECENT DIVIDEND"
         div_matrix = "NONE"
 
-    # 5. Evaluate Valuation (P/E, P/B, EPS)
+    # 5. Sector-Specific Valuation Engine
+    is_metals = any(k in sec_ind_text for k in ["metal", "steel", "mining", "aluminium", "copper", "iron"])
+    is_tech_retail = any(k in sec_ind_text for k in ["tech", "software", "it services", "retail", "internet", "e-commerce"])
+
     if net_income is not None and isinstance(net_income, (int, float)) and net_income < 0:
         valuation_verdict = "🔴 VERY EXPENSIVE / LOSS-MAKING"
-        valuation_expl = f"{company_name} is currently reporting negative trailing earnings. A loss-making company cannot be evaluated on standard P/E ratios; valuation depends on a turnaround in cash generation."
-        cheap_answer = "NO - Company is currently loss-making."
+        valuation_expl = f"{company_name} is currently reporting negative net earnings. A loss-making company cannot be evaluated on standard P/E multiples; valuation depends on an operational turnaround."
+        cheap_answer = "NO - Company is currently reporting a net loss."
         price_matrix = "HIGH RISK / LOSS-MAKING"
-    elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 50:
-        valuation_verdict = "🔴 VERY EXPENSIVE"
-        valuation_expl = f"Investors are paying a high growth multiple of {pe_str} trailing profits. The share price carries high market expectations."
-        cheap_answer = f"NO - Traded at a premium multiple of {pe_str} P/E."
-        price_matrix = "VERY EXPENSIVE"
-    elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 28:
-        valuation_verdict = "🟠 EXPENSIVE"
-        valuation_expl = f"The share trades at {pe_str} P/E. The company is performing well, but investors are already paying a premium for that operating quality."
-        cheap_answer = f"NO - Market already prices in performance at {pe_str} P/E."
-        price_matrix = "EXPENSIVE"
-    elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val >= 12:
-        valuation_verdict = "🟡 FAIR"
-        valuation_expl = f"The share trades at a reasonable multiple of {pe_str} trailing profits, aligning with industry valuation benchmarks."
-        cheap_answer = f"FAIR - Traded at {pe_str} P/E."
-        price_matrix = "FAIR"
-    elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val < 12 and roe_val is not None and isinstance(roe_val, (int, float)) and roe_val > 12:
-        valuation_verdict = "🟢 ATTRACTIVE"
-        valuation_expl = f"The share trades at a low multiple of {pe_str} P/E despite earning a high ROE of {roe_str}. Today's share price appears deeply discounted."
-        cheap_answer = f"YES - Traded at an attractive P/E of {pe_str}."
-        price_matrix = "ATTRACTIVE"
+
+    elif is_bank:
+        # Bank Valuation Model: P/B ratio + Asset Efficiency (ROA) + Asset Quality (NNPA)
+        pb_str = m_val.get("pb_ratio", {}).get("formatted_string", "N/A") if isinstance(m_val.get("pb_ratio"), dict) else "N/A"
+        if pb_val is not None and isinstance(pb_val, (int, float)) and pb_val > 3.0:
+            valuation_verdict = "🔴 VERY EXPENSIVE"
+            valuation_expl = f"Bank trades at a high price-to-book multiple of {pb_str} net worth. Market expects strong credit expansion and low bad loans."
+            cheap_answer = f"NO - Traded at a premium Price-to-Book multiple of {pb_str}."
+            price_matrix = "VERY EXPENSIVE"
+        elif pb_val is not None and isinstance(pb_val, (int, float)) and pb_val > 1.8:
+            valuation_verdict = "🟠 EXPENSIVE"
+            valuation_expl = f"Bank trades at {pb_str} Price-to-Book. Operating quality is established, but share price already discounts future credit growth."
+            cheap_answer = f"NO - Valued at {pb_str} Price-to-Book multiple."
+            price_matrix = "EXPENSIVE"
+        elif pb_val is not None and isinstance(pb_val, (int, float)) and pb_val >= 0.8:
+            valuation_verdict = "🟡 FAIR"
+            valuation_expl = f"Bank trades at a reasonable multiple of {pb_str} Price-to-Book, aligning with sector averages for bank equity."
+            cheap_answer = f"FAIR - Valued at a reasonable {pb_str} Price-to-Book."
+            price_matrix = "FAIR"
+        elif pb_val is not None and isinstance(pb_val, (int, float)) and pb_val < 0.8 and (nnpa_val is None or nnpa_val <= 1.5):
+            valuation_verdict = "🟢 ATTRACTIVE"
+            valuation_expl = f"Bank trades below book value ({pb_str} P/B) despite manageable bad loans (NNPA: {nnpa_str}). Share price appears discounted relative to asset net worth."
+            cheap_answer = f"YES - Discounted valuation at {pb_str} Price-to-Book."
+            price_matrix = "ATTRACTIVE"
+        else:
+            valuation_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
+            valuation_expl = "Bank valuation multiple could not be reliably verified from available disclosures."
+            cheap_answer = "UNCLEAR - Bank valuation metrics could not be verified."
+            price_matrix = "UNCLEAR"
+
+    elif is_metals:
+        # Metals / Commodity Model: Low trailing P/E often occurs near peak earnings!
+        if pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 25:
+            valuation_verdict = "🔴 VERY EXPENSIVE"
+            valuation_expl = f"Metal/commodity producer trades at {pe_str} trailing P/E during a cyclical phase."
+            cheap_answer = f"NO - Traded at a high P/E multiple of {pe_str}."
+            price_matrix = "VERY EXPENSIVE"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val < 8:
+            valuation_verdict = "🟠 CYCLICAL CAUTION"
+            valuation_expl = f"Commodity producer trades at a low trailing P/E of {pe_str}. Note for beginners: In cyclical metal sectors, low trailing P/E often occurs near peak cycle earnings."
+            cheap_answer = f"CYCLICAL CAUTION - Low P/E ({pe_str}) may reflect peak cycle earnings."
+            price_matrix = "EXPENSIVE"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val >= 8:
+            valuation_verdict = "🟡 FAIR"
+            valuation_expl = f"Commodity producer trades at {pe_str} P/E, reflecting mid-cycle market pricing."
+            cheap_answer = f"FAIR - Traded at {pe_str} P/E."
+            price_matrix = "FAIR"
+        else:
+            valuation_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
+            valuation_expl = "Commodity valuation multiple could not be verified."
+            cheap_answer = "UNCLEAR - Valuation metrics unavailable."
+            price_matrix = "UNCLEAR"
+
+    elif is_tech_retail:
+        # Fast Growing Tech / Retail Model: Accommodates higher P/E for high ROE (>20%) & high growth
+        if pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 65:
+            valuation_verdict = "🔴 VERY EXPENSIVE"
+            valuation_expl = f"Fast-growing service/retail business trades at a high multiple of {pe_str} P/E."
+            cheap_answer = f"NO - Premium growth multiple of {pe_str} P/E."
+            price_matrix = "VERY EXPENSIVE"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 30:
+            valuation_verdict = "🟠 EXPENSIVE"
+            valuation_expl = f"Trades at {pe_str} P/E. Growth trajectory is healthy, but current share price already discounts future expansion."
+            cheap_answer = f"NO - Premium growth pricing at {pe_str} P/E."
+            price_matrix = "EXPENSIVE"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val >= 18:
+            valuation_verdict = "🟡 FAIR"
+            valuation_expl = f"Trades at a reasonable P/E multiple of {pe_str} relative to sector peer growth rates."
+            cheap_answer = f"FAIR - Reasonably priced at {pe_str} P/E."
+            price_matrix = "FAIR"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val < 18:
+            valuation_verdict = "🟢 ATTRACTIVE"
+            valuation_expl = f"Tech/retail business trades at an attractive multiple of {pe_str} P/E relative to its operating returns."
+            cheap_answer = f"YES - Attractively priced at {pe_str} P/E."
+            price_matrix = "ATTRACTIVE"
+        else:
+            valuation_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
+            valuation_expl = "Valuation multiple could not be verified."
+            cheap_answer = "UNCLEAR - Valuation metrics unavailable."
+            price_matrix = "UNCLEAR"
+
     else:
-        valuation_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
-        valuation_expl = "Valuation is difficult to judge reliably — current earnings multiple could not be verified from available primary disclosures."
-        cheap_answer = "UNCLEAR - Current earnings multiple could not be verified."
-        price_matrix = "UNCLEAR"
+        # Standard Industrial / Corporate Model
+        if pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 50:
+            valuation_verdict = "🔴 VERY EXPENSIVE"
+            valuation_expl = f"Investors are paying a high growth multiple of {pe_str} trailing profits. The share price carries high market expectations."
+            cheap_answer = f"NO - Traded at a premium multiple of {pe_str} P/E."
+            price_matrix = "VERY EXPENSIVE"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val > 28:
+            valuation_verdict = "🟠 EXPENSIVE"
+            valuation_expl = f"The share trades at {pe_str} P/E. The company is performing well, but investors are already paying a premium for that operating quality."
+            cheap_answer = f"NO - Market already prices in performance at {pe_str} P/E."
+            price_matrix = "EXPENSIVE"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val >= 12:
+            valuation_verdict = "🟡 FAIR"
+            valuation_expl = f"The share trades at a reasonable multiple of {pe_str} trailing profits, aligning with industry valuation benchmarks."
+            cheap_answer = f"FAIR - Traded at {pe_str} P/E."
+            price_matrix = "FAIR"
+        elif pe_val is not None and isinstance(pe_val, (int, float)) and pe_val < 12 and roe_val is not None and isinstance(roe_val, (int, float)) and roe_val > 12:
+            valuation_verdict = "🟢 ATTRACTIVE"
+            valuation_expl = f"The share trades at a low multiple of {pe_str} P/E despite earning a high ROE of {roe_str}. Today's share price appears deeply discounted."
+            cheap_answer = f"YES - Traded at an attractive P/E of {pe_str}."
+            price_matrix = "ATTRACTIVE"
+        else:
+            valuation_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
+            valuation_expl = "Valuation is difficult to judge reliably — current earnings multiple could not be verified from available primary disclosures."
+            cheap_answer = "UNCLEAR - Current earnings multiple could not be verified."
+            price_matrix = "UNCLEAR"
 
     # 6. Sector & Stock Specific Watchpoint
     if is_bank:
