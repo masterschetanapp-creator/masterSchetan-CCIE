@@ -244,21 +244,53 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
     else:
         final_status = "Research View: 🟡 Mixed Fundamentals / 🟡 Perform Detailed Verification"
 
-    att_debt_str = f"Gross NPAs (GNPA): {gnpa_str} / Net NPAs (NNPA): {nnpa_str}" if is_bank else f"Debt to Equity: {de_str} leverage ratio"
-    careful_debt_str = f"Asset quality monitoring (GNPA: {gnpa_str}, NNPA: {nnpa_str})" if is_bank else f"Debt-to-equity ratio of {de_str}"
-    watch_next_list = [
-        "NIM spread & yield on advances",
-        "Gross & Net NPA slippage trajectory",
-        "CASA deposit ratio expansion",
-        "Capital Adequacy Ratio (CRAR / CET1)",
-        "Provision Coverage Ratio (PCR)"
-    ] if is_bank else [
-        f"Quarterly revenue velocity in {sector_name}",
-        "Operating margin spread trajectory",
-        "Free cash flow vs reported net profit",
-        "Debt-to-equity & borrowing cost movements",
-        "Execution on announced expansion plans"
-    ]
+    # Beginner-Friendly Jargon-Free Statements (Numbers kept accessible behind 'Show numbers →')
+    rev_imp_text = "Sales and overall business activity are expanding YoY." if (rev_growth_val is not None and rev_growth_val > 0) else "Sales trends require close quarterly monitoring."
+    
+    if roe_val is not None and isinstance(roe_val, (int, float)) and roe_val > 15:
+        roe_imp_text = "The company is earning a healthy profit relative to shareholder money."
+    elif roe_val is not None and isinstance(roe_val, (int, float)) and roe_val > 8:
+        roe_imp_text = "The company generates steady, reasonable returns on shareholder equity."
+    else:
+        roe_imp_text = "Operating returns generated on shareholder money remain modest."
+
+    if is_bank:
+        debt_att_text = "Bad loans and credit risk levels are low and well-controlled." if (nnpa_val is None or nnpa_val <= 1.0) else "Net bad loans require ongoing monitoring."
+        careful_debt_text = "Asset quality and credit cost movements require monitoring."
+        watch_next_list = [
+            "Profit earned on total loans and deposits (NIM spread)",
+            "Movement in new bad loans (Slippages & NPAs)",
+            "Growth in low-cost savings deposits (CASA ratio)",
+            "Safety cushion reserve against bad loans (Capital Adequacy & PCR)"
+        ]
+    else:
+        if de_val is not None and isinstance(de_val, (int, float)) and de_val > 1.5:
+            debt_att_text = "Borrowing level is meaningful and should be monitored."
+        elif de_val is not None and isinstance(de_val, (int, float)) and de_val < 0.5:
+            debt_att_text = "Borrowing levels are low and debt is well within safe boundaries."
+        else:
+            debt_att_text = "Debt and borrowing levels are moderate and stable."
+        careful_debt_text = "Company debt levels require monitoring alongside operating cash flow."
+        watch_next_list = [
+            "Quarterly sales and customer demand velocity",
+            "Profit margin left after operational costs",
+            "Actual cash arriving in bank vs reported net profit",
+            "Borrowing levels and interest costs",
+            "Progress on announced new factories or expansion plans"
+        ]
+
+    val_att_text = "Share price carries high market expectations relative to company earnings." if "EXPENSIVE" in valuation_verdict else "Share price trades at reasonable valuation expectations relative to earnings."
+
+    raw_metrics_summary = {
+        "Return on Equity (ROE)": roe_str,
+        "Operating Margin": op_str,
+        "1Y Revenue Growth": rev_str,
+        "1Y Net Profit Growth": pat_str,
+        "Price-to-Earnings (P/E)": pe_str,
+        "Debt to Equity": "N/A (Bank)" if is_bank else de_str,
+        "Gross NPAs (GNPA)": gnpa_str if is_bank else "N/A",
+        "Net NPAs (NNPA)": nnpa_str if is_bank else "N/A"
+    }
 
     return {
         "summary_30s": [
@@ -272,35 +304,35 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         "simple_ai_view": f"{company_name} is operating in {sector_name}. Business health is assessed as {biz_status}, with debt position {fin_health.lower()}. Valuation is currently {valuation_verdict}.",
         "what_company_does": info.get("longBusinessSummary", f"{company_name} operates in the {sector_name} sector, serving consumers and commercial clients."),
         "what_is_improving": [
-            f"1Y Revenue trend: {rev_str} YoY growth",
-            f"Return on Equity (ROE): {roe_str} capital efficiency",
-            f"Operating Spread: {op_str} core margin"
+            rev_imp_text,
+            roe_imp_text,
+            "Core business profit margin remains stable after meeting operational costs."
         ],
         "what_deserves_attention": [
-            att_debt_str,
-            f"Forensic Flags: {len(red_flags)} items flagged by automated audit",
-            f"Trailing Valuation Multiple: {pe_str} P/E"
+            debt_att_text,
+            f"Automated forensic audit: {len(red_flags)} items flagged for monitoring",
+            val_att_text
         ],
         "valuation_verdict": valuation_verdict,
         "valuation_explanation": valuation_expl,
         "why_consider": [
-            f"Core operating scale in {sector_name}",
-            f"Return on Equity of {roe_str}",
-            f"Established domestic market franchise",
-            f"Promoter / Controlling ownership structure",
-            f"Regular financial disclosures filed with BSE/NSE"
+            f"Established business scale and market presence in {sector_name}",
+            "Strong track record of earning profit on shareholder capital",
+            "Established domestic customer franchise and distribution network",
+            "Promoter / Controlling ownership stability",
+            "Regular audited financial disclosures filed with BSE/NSE"
         ],
         "why_be_careful": [
-            f"Valuation is assessed as {valuation_verdict}",
-            careful_debt_str,
+            f"Share valuation is assessed as {valuation_verdict}",
+            careful_debt_text,
             f"{len(red_flags)} accounting/forensic checks flagged for monitoring",
-            "Sensitivity to input cost inflation and broader economic demand",
-            "Rupee share price alone does not indicate cheapness or value"
+            "Sensitivity to raw material cost inflation and broader economic demand",
+            "Share price alone does not indicate whether a stock is cheap or expensive"
         ],
         "tip_check_rows": [
             {"Question": "Does the company make money?", "Simple answer": "NO (Loss-making)" if net_income is not None and isinstance(net_income, (int, float)) and net_income < 0 else "YES"},
             {"Question": "Is profit improving?", "Simple answer": profit_growing},
-            {"Question": "Is core business growing?", "Simple answer": f"Revenue 1Y: {rev_str}"},
+            {"Question": "Is core business growing?", "Simple answer": f"Sales 1Y: {rev_str}"},
             {"Question": "Are debt / bad loans okay?", "Simple answer": debt_control},
             {"Question": "Does it pay dividends?", "Simple answer": div_status},
             {"Question": "Is it obviously cheap?", "Simple answer": cheap_answer},
@@ -315,6 +347,7 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
             {"Area": "Price", "Assessment": valuation_verdict},
             {"Area": "Risk", "Assessment": risk_rating}
         ],
+        "raw_metrics_summary": raw_metrics_summary,
         "bottom_line": f"Based on empirical financial statements, {company_name}'s business quality is assessed as {biz_status} with {fin_health.lower()} financial health. At today's price of ₹{cur_price:,.2f}, valuation is {valuation_verdict}. The key variable for an investor is whether earnings will support this price.",
         "final_research_status": final_status
     }
@@ -449,12 +482,30 @@ def render_common_man_view(dossier: dict):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    with st.expander("📊 Show underlying financial numbers (For advanced users)", expanded=False):
+        raw_m = cm_report.get("raw_metrics_summary", {})
+        if raw_m:
+            rows_html = "".join([f"<tr><td style='padding: 0.5rem 1rem; color: #0f172a; font-weight: 600;'>{k}</td><td style='padding: 0.5rem 1rem; color: #2563eb; font-weight: 700;'>{v}</td></tr>" for k, v in raw_m.items()])
+            st.markdown(f"""
+            <table style="width: 100%; border-collapse: collapse; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 0.5rem;">
+                <thead>
+                    <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                        <th style="padding: 0.6rem 1rem; text-align: left; color: #475569;">Financial Metric</th>
+                        <th style="padding: 0.6rem 1rem; text-align: left; color: #475569;">Calculated Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_html}
+                </tbody>
+            </table>
+            """, unsafe_allow_html=True)
+
     # 6. Think of it this way
     st.markdown("""
     <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
         <strong style="color: #047857; font-size: 0.95rem;">Think of it this way:</strong>
         <p style="color: #1f2937; margin: 0.35rem 0 0 0; font-size: 0.95rem; line-height: 1.6;">
-            For every ₹100 of revenue the company generates, it retains a portion as operating earnings after meeting costs. Operating margin spread and free cash flow dictate the underlying health of this business.
+            For every Rs 100 of revenue the company generates, it retains a portion as operating earnings after meeting costs. Operating profit margin and free cash flow dictate the underlying health of this business.
         </p>
     </div>
     """, unsafe_allow_html=True)
