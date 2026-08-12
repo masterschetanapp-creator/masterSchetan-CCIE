@@ -63,7 +63,14 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
     div_yield = info.get("dividendYield", 0) or 0
     cur_price = price_data.get("current_price", 0)
     net_income = info.get("netIncomeToCommon") or info.get("trailingEps")
-    
+       
+    # Check if entity is a Bank / Financial Institution
+    sec_ind_text = f"{sector_name} {info.get('industry', '')} {company_name} {symbol}".lower()
+    is_bank = any(k in sec_ind_text for k in ["bank", "pnb", "sbin", "hdfc", "icici", "axis", "kotak", "canbk", "unionbank", "bankbaroda", "indusind"])
+
+    # For banks, corporate Debt-to-Equity is NOT a risk metric (Assets/Equity ~10x is normal operating leverage)
+    effective_de_val = None if is_bank else de_val
+
     # 1. Evaluate Business Health
     if net_income is not None and isinstance(net_income, (int, float)) and net_income < 0:
         biz_doing_well = f"NO - {company_name} is currently loss-making."
@@ -96,20 +103,42 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
     else:
         profit_growing = "Check audited P&L filings for YoY net profit growth."
 
-    # 3. Evaluate Debt & Red Flags
+    # 3. Evaluate Debt & Asset Quality (Bank vs Corporate routing)
     danger_flags = [rf for rf in red_flags if isinstance(rf, dict) and rf.get("severity") == "danger"]
-    if de_val is not None and isinstance(de_val, (int, float)) and de_val > 2.0:
-        debt_control = f"NO / HIGH RISK - Debt-to-Equity is elevated ({de_str})."
-        fin_health = "HIGH LEVERAGE / WEAK"
-    elif len(danger_flags) > 0:
-        debt_control = f"MONITOR - {len(danger_flags)} high-severity forensic flags detected."
-        fin_health = "NEEDS MONITORING"
-    elif de_val is not None and isinstance(de_val, (int, float)) and de_val < 0.5 and len(red_flags) == 0:
-        debt_control = f"YES - Borrowing is low ({de_str}) and financial position is healthy."
-        fin_health = "COMFORTABLE"
+    
+    gnpa_obj = computed.get("gnpa") if isinstance(computed, dict) else None
+    nnpa_obj = computed.get("nnpa") if isinstance(computed, dict) else None
+    gnpa_val = gnpa_obj.get("value") if isinstance(gnpa_obj, dict) else None
+    nnpa_val = nnpa_obj.get("value") if isinstance(nnpa_obj, dict) else None
+    gnpa_str = gnpa_obj.get("formatted_string", "N/A") if isinstance(gnpa_obj, dict) else "N/A"
+    nnpa_str = nnpa_obj.get("formatted_string", "N/A") if isinstance(nnpa_obj, dict) else "N/A"
+
+    if is_bank:
+        if nnpa_val is not None and isinstance(nnpa_val, (int, float)) and nnpa_val > 3.0:
+            debt_control = f"NO / CONCERN - Net Bad Loans (NNPA) elevated at {nnpa_str}."
+            fin_health = "HIGH BAD LOANS / WEAK"
+        elif gnpa_val is not None and isinstance(gnpa_val, (int, float)) and gnpa_val > 5.0:
+            debt_control = f"MONITOR - Gross Bad Loans (GNPA) at {gnpa_str} (NNPA: {nnpa_str})."
+            fin_health = "NEEDS MONITORING"
+        elif len(danger_flags) > 0:
+            debt_control = f"MONITOR - {len(danger_flags)} high-severity forensic flags detected."
+            fin_health = "NEEDS MONITORING"
+        else:
+            debt_control = f"YES - Bad loans under control (GNPA: {gnpa_str}, NNPA: {nnpa_str}). Capital position is adequate."
+            fin_health = "COMFORTABLE"
     else:
-        debt_control = f"STABLE - Debt to Equity is {de_str}."
-        fin_health = "STABLE"
+        if de_val is not None and isinstance(de_val, (int, float)) and de_val > 2.0:
+            debt_control = f"NO / HIGH RISK - Debt-to-Equity is elevated ({de_str})."
+            fin_health = "HIGH LEVERAGE / WEAK"
+        elif len(danger_flags) > 0:
+            debt_control = f"MONITOR - {len(danger_flags)} high-severity forensic flags detected."
+            fin_health = "NEEDS MONITORING"
+        elif de_val is not None and isinstance(de_val, (int, float)) and de_val < 0.5 and len(red_flags) == 0:
+            debt_control = f"YES - Borrowing is low ({de_str}) and financial position is healthy."
+            fin_health = "COMFORTABLE"
+        else:
+            debt_control = f"STABLE - Debt to Equity is {de_str}."
+            fin_health = "STABLE"
 
     # 4. Evaluate Dividend (Strict 4-tier logic based on actual exchange dividend history)
     raw_divs = info.get("_dividends_list", []) if isinstance(info, dict) else []
@@ -170,32 +199,33 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         price_matrix = "UNCLEAR"
 
     # 6. Sector & Stock Specific Watchpoint
-    s_lower = str(sector_name).lower()
-    if "bank" in s_lower or "financial" in s_lower:
-        biggest_watch = "Gross bad loans (GNPA), deposit growth velocity, and NIM spread."
-    elif "auto" in s_lower or "vehicle" in s_lower:
+    if is_bank:
+        biggest_watch = "Gross bad loans (GNPA), Net NPAs (NNPA), deposit growth velocity, and NIM spread."
+    elif "auto" in sec_ind_text or "vehicle" in sec_ind_text:
         biggest_watch = "Vehicle sales volumes, EV penetration, and raw material steel costs."
-    elif "tech" in s_lower or "it" in s_lower or "software" in s_lower:
+    elif "tech" in sec_ind_text or "it" in sec_ind_text or "software" in sec_ind_text:
         biggest_watch = "BFSI deal wins, attrition, billing rates, and US client tech spend."
-    elif "power" in s_lower or "energy" in s_lower:
+    elif "power" in sec_ind_text or "energy" in sec_ind_text:
         biggest_watch = "PPA tariff execution, renewable project commissioning, and debt levels."
     else:
         biggest_watch = "Quarterly revenue velocity, operating margin, and cash conversion."
 
-    # 7. Tip Check Result
+    # 7. Tip Check Result (Safe Bank Routing: effective_de_val ignores corporate Debt/Equity for banks)
     if net_income is not None and isinstance(net_income, (int, float)) and net_income < 0:
         tip_result = "MAJOR FUNDAMENTAL CONCERNS"
-    elif len(danger_flags) > 0 or (de_val is not None and isinstance(de_val, (int, float)) and de_val > 2.0):
+    elif is_bank and nnpa_val is not None and isinstance(nnpa_val, (int, float)) and nnpa_val > 3.0:
+        tip_result = "MAJOR FUNDAMENTAL CONCERNS"
+    elif len(danger_flags) > 0 or (effective_de_val is not None and effective_de_val > 2.0):
         tip_result = "HIGH EXPECTATIONS / IMPORTANT RISKS"
-    elif roe_val is not None and isinstance(roe_val, (int, float)) and roe_val > 12 and (de_val is None or (isinstance(de_val, (int, float)) and de_val < 1.0)):
+    elif roe_val is not None and isinstance(roe_val, (int, float)) and roe_val > 12 and (fin_health in ("COMFORTABLE", "STABLE")):
         tip_result = "FUNDAMENTALLY SUPPORTED IDEA"
     else:
         tip_result = "MIXED FUNDAMENTALS"
 
-    # 8. Risk Rating
-    if len(danger_flags) > 0 or (net_income is not None and isinstance(net_income, (int, float)) and net_income < 0) or (de_val is not None and isinstance(de_val, (int, float)) and de_val > 2.0):
+    # 8. Risk Rating (Safe Bank Routing: effective_de_val ignores corporate Debt/Equity for banks)
+    if len(danger_flags) > 0 or (net_income is not None and isinstance(net_income, (int, float)) and net_income < 0) or (effective_de_val is not None and effective_de_val > 2.0) or (is_bank and nnpa_val is not None and isinstance(nnpa_val, (int, float)) and nnpa_val > 3.0):
         risk_rating = "HIGH"
-    elif len(red_flags) > 1 or (de_val is not None and isinstance(de_val, (int, float)) and de_val > 1.0):
+    elif len(red_flags) > 1 or (effective_de_val is not None and effective_de_val > 1.0) or (is_bank and gnpa_val is not None and isinstance(gnpa_val, (int, float)) and gnpa_val > 5.0):
         risk_rating = "MEDIUM-HIGH"
     else:
         risk_rating = "MEDIUM"
@@ -209,6 +239,22 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         final_status = "Research View: 🔴 Major Fundamental Concerns / 🔴 Avoid Unproven Turnarounds"
     else:
         final_status = "Research View: 🟡 Mixed Fundamentals / 🟡 Perform Detailed Verification"
+
+    att_debt_str = f"Gross NPAs (GNPA): {gnpa_str} / Net NPAs (NNPA): {nnpa_str}" if is_bank else f"Debt to Equity: {de_str} leverage ratio"
+    careful_debt_str = f"Asset quality monitoring (GNPA: {gnpa_str}, NNPA: {nnpa_str})" if is_bank else f"Debt-to-equity ratio of {de_str}"
+    watch_next_list = [
+        "NIM spread & yield on advances",
+        "Gross & Net NPA slippage trajectory",
+        "CASA deposit ratio expansion",
+        "Capital Adequacy Ratio (CRAR / CET1)",
+        "Provision Coverage Ratio (PCR)"
+    ] if is_bank else [
+        f"Quarterly revenue velocity in {sector_name}",
+        "Operating margin spread trajectory",
+        "Free cash flow vs reported net profit",
+        "Debt-to-equity & borrowing cost movements",
+        "Execution on announced expansion plans"
+    ]
 
     return {
         "summary_30s": [
@@ -227,7 +273,7 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
             f"Operating Spread: {op_str} core margin"
         ],
         "what_deserves_attention": [
-            f"Debt to Equity: {de_str} leverage ratio",
+            att_debt_str,
             f"Forensic Flags: {len(red_flags)} items flagged by automated audit",
             f"Trailing Valuation Multiple: {pe_str} P/E"
         ],
@@ -242,7 +288,7 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         ],
         "why_be_careful": [
             f"Valuation is assessed as {valuation_verdict}",
-            f"Debt-to-equity ratio of {de_str}",
+            careful_debt_str,
             f"{len(red_flags)} accounting/forensic checks flagged for monitoring",
             "Sensitivity to input cost inflation and broader economic demand",
             "Rupee share price alone does not indicate cheapness or value"
@@ -257,13 +303,7 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
             {"Question": "Main thing people may overlook", "Simple answer": biggest_watch}
         ],
         "tip_check_result": tip_result,
-        "beginner_watch_next": [
-            f"Quarterly revenue velocity in {sector_name}",
-            f"Operating margin spread trajectory",
-            f"Free cash flow vs reported net profit",
-            f"Debt-to-equity & borrowing cost movements",
-            f"Execution on announced expansion plans"
-        ],
+        "beginner_watch_next": watch_next_list,
         "decision_matrix": [
             {"Area": "Business", "Assessment": biz_status},
             {"Area": "Financial Health", "Assessment": fin_health},
