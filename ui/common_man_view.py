@@ -472,17 +472,17 @@ def render_common_man_view(dossier: dict):
     num_years_paid = len(years_paid)
 
     if not raw_divs and div_yield == 0:
-        st.markdown("**NO VERIFIED RECENT DIVIDEND.** No cash dividend payouts recorded in primary exchange disclosures.")
+        st.markdown("**NO VERIFIED RECENT DIVIDEND.** No recent dividend was found in the market-data history available to CCIE.")
     elif num_years_paid >= 4:
-        st.markdown(f"**REGULAR RECENTLY.** Verified dividend payouts in **{num_years_paid} of the last 5 years** (Yield: **{div_yield*100:.2f}%**):")
+        st.markdown(f"**REGULAR RECENTLY.** Dividend payouts recorded in **{num_years_paid} of the last 5 years** (Yield: **{div_yield*100:.2f}%**; Sourced from market data history — verify with official NSE/BSE corporate action filings):")
         if div_rows:
             st.markdown(_render_html_table(["Date / Event", "Dividend per share"], div_rows), unsafe_allow_html=True)
     elif num_years_paid >= 1 or div_yield > 0:
-        st.markdown(f"**IRREGULAR.** Verified dividend payouts in **{num_years_paid} of the last 5 years** (Yield: **{div_yield*100:.2f}%**):")
+        st.markdown(f"**IRREGULAR.** Dividend payouts recorded in **{num_years_paid} of the last 5 years** (Yield: **{div_yield*100:.2f}%**; Sourced from market data history — verify with official NSE/BSE corporate action filings):")
         if div_rows:
             st.markdown(_render_html_table(["Date / Event", "Dividend per share"], div_rows), unsafe_allow_html=True)
     else:
-        st.markdown("**NO VERIFIED RECENT DIVIDEND.** No recent cash dividend payouts recorded in primary exchange filings.")
+        st.markdown("**NO VERIFIED RECENT DIVIDEND.** No recent dividend was found in the market-data history available to CCIE.")
 
     if cur_price > 0 and div_yield > 0:
         est_lakh_div = cur_price * (100000 / cur_price) * div_yield
