@@ -227,28 +227,17 @@ def render_simple_view(dossier: dict):
     rec_key = expanded_res.get("recommendation")
     n_analysts = expanded_res.get("num_analysts", 0)
 
-    if rec_key and not is_missing(rec_key):
-        analyst_block = f"""
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #059669; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem;">
-            <strong>🎯 External Analyst Consensus ({n_analysts} Analysts — Not CCIE Recommendation):</strong> 
-            <span class="badge badge-confirmed">{rec_key}</span> · 
-            <strong>Target High:</strong> {expanded_res.get('target_high', 'N/A')} · 
-            <strong>Target Mean:</strong> {expanded_res.get('target_mean', 'N/A')}
-        </div>
-        """
-    else:
-        analyst_block = """
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #94a3b8; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem;">
-            <strong>🎯 External Analyst Consensus:</strong> <span style="color: #64748b;">Not available / Unverified for this stock</span>
-        </div>
-        """
+    del_html = f'<div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem;"><strong>📦 NSE Delivery Position:</strong> <span class="badge {del_badge}">{del_str}</span></div>'
+    st.markdown(del_html, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem;">
-        <strong>📦 NSE Delivery Position:</strong> <span class="badge {del_badge}">{del_str}</span>
-    </div>
-    {analyst_block}
-    """, unsafe_allow_html=True)
+    if rec_key and not is_missing(rec_key):
+        target_high_val = expanded_res.get('target_high', 'N/A')
+        target_mean_val = expanded_res.get('target_mean', 'N/A')
+        analyst_html = f'<div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #059669; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem;"><strong>🎯 External Analyst Consensus ({n_analysts} Analysts — Not CCIE Recommendation):</strong> <span class="badge badge-confirmed">{rec_key}</span> · <strong>Target High:</strong> {target_high_val} · <strong>Target Mean:</strong> {target_mean_val}</div>'
+    else:
+        analyst_html = '<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #94a3b8; border-radius: 8px; padding: 0.85rem 1.25rem; margin: 1rem 0; font-size: 0.95rem;"><strong>🎯 External Analyst Consensus:</strong> <span style="color: #64748b;">Not available / Unverified for this stock</span></div>'
+
+    st.markdown(analyst_html, unsafe_allow_html=True)
 
     # Positives & Risks
     render_section_header("2. Primary Strengths & Risk Factors", "⚖️", "Key drivers")
