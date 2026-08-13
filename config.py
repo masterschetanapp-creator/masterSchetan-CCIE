@@ -46,11 +46,14 @@ GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 DEEPSEEK_API_KEY = get_secret("DEEPSEEK_API_KEY")
+# Enabled by default. Set CCIE_ENABLE_EXCHANGE_FILINGS=false to disable live
+# exchange retrieval in an environment where outbound filing access is blocked.
+EXCHANGE_FILING_FETCH_ENABLED = str(get_secret("CCIE_ENABLE_EXCHANGE_FILINGS") or "true").strip().lower() in {"1", "true", "yes", "on"}
 
 # ── App Settings ───────────────────────────────────────
 APP_NAME = "masterSchetan CCIE"
 APP_TAGLINE = "Complete Company Intelligence Engine for Indian Equities"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 # ── Cache Freshness (seconds) ──────────────────────────
 CACHE_TTL = {
@@ -59,6 +62,7 @@ CACHE_TTL = {
     "management": 7 * 86400,             # 7 days
     "annual_financials": 90 * 86400,     # Quarterly
     "quarterly_results": 1 * 86400,      # Daily check
+    "primary_evidence": 6 * 3600,        # Direct exchange filing discovery
     "shareholding": 90 * 86400,          # Quarterly
     "order_book": 1 * 86400,             # Daily
     "dividends": 7 * 86400,             # Weekly

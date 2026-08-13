@@ -6,6 +6,7 @@ Supports both Commercial Companies and Banking / Financial Institutions.
 
 import math
 from typing import Dict, Any, List, Optional
+from analysis.metric_schema import UNKNOWN, apply_metric_schema, first_known, latest_statement
 
 
 def get_first_valid(dict_obj: Dict[str, Any], keys: List[str]) -> Optional[float]:
@@ -21,6 +22,11 @@ def get_first_valid(dict_obj: Dict[str, Any], keys: List[str]) -> Optional[float
             except (ValueError, TypeError):
                 continue
     return None
+
+
+def format_crore(value: Optional[float]) -> str:
+    """Format a statement value in crore without substituting a numeric fallback."""
+    return UNKNOWN if value is None else f"{value / 1e7:,.2f} Cr"
 
 
 def calculate_cagr(start_value: float, end_value: float, years: int) -> Optional[float]:
@@ -212,6 +218,54 @@ def calculate_growth(income_stmts: List[Dict[str, Any]]) -> Dict[str, Any]:
     return result
 
 
+def calculate_latest_period_yoy_growth(income_stmts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Calculate year-on-year growth for the latest quarterly period only.
+
+    Sequential quarter-on-quarter changes are not labelled as one-year growth.
+    """
+    current = latest_statement(income_stmts)
+    if not current:
+        return {}
+
+    current_date = str(current.get("period_end") or current.get("date") or "")
+    try:
+        year, month = int(current_date[:4]), int(current_date[5:7])
+    except (TypeError, ValueError):
+        return {}
+
+    comparison = next(
+        (
+            record for record in income_stmts
+            if isinstance(record, dict)
+            and str(record.get("period_end") or record.get("date") or "")[:4] == str(year - 1)
+            and str(record.get("period_end") or record.get("date") or "")[5:7] == f"{month:02d}"
+            and record.get("statement_scope", UNKNOWN) == current.get("statement_scope", UNKNOWN)
+        ),
+        None,
+    )
+    if not comparison:
+        return {}
+
+    result = {}
+    revenue_keys = ['Total Revenue', 'Operating Revenue', 'Net Interest Income', 'Interest Income', 'Total Income']
+    profit_keys = ['Net Income', 'Net Income Common Stockholders', 'Net Income Continuous Operations']
+    for result_key, display_name, keys in [
+        ('revenue_cagr_1y', 'Revenue', revenue_keys),
+        ('profit_cagr_1y', 'Net Profit', profit_keys),
+    ]:
+        latest_value = get_first_valid(current, keys)
+        year_ago_value = get_first_valid(comparison, keys)
+        if latest_value is not None and year_ago_value is not None and year_ago_value > 0:
+            change = ((latest_value - year_ago_value) / year_ago_value) * 100
+            result[result_key] = {
+                'value': change,
+                'formatted_string': f"{change:+.2f}%",
+                'status': 'green' if change > 10 else ('amber' if change > 0 else 'red'),
+                'explanation': f"Latest quarterly {display_name} growth compared with the same quarter one year earlier.",
+            }
+    return result
+
+
 def calculate_debt_metrics(balance_sheet: Dict[str, Any], income_stmt: Dict[str, Any], is_bank: bool = False) -> Dict[str, Any]:
     """Debt/Equity, Interest Coverage, Debt/EBITDA."""
     result = {}
@@ -263,7 +317,7 @@ def calculate_valuation(price: float, info: Dict[str, Any]) -> Dict[str, Any]:
     """P/E, P/B, Dividend Yield without invented fallbacks."""
     result = {}
 
-    pe = info.get('trailingPE') or info.get('forwardPE')
+    pe = first_known(info.get('trailingPE'), info.get('forwardPE'))
     if pe is not None and isinstance(pe, (int, float)) and pe > 0:
         result['pe_ratio'] = {
             'value': float(pe),
@@ -331,10 +385,46 @@ def calculate_cash_flow_quality(cashflow: Dict[str, Any], income_stmt: Dict[str,
     return result
 
 
+def aggregate_dividends_by_financial_year(dividend_history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Aggregates individual dividend events by Financial Year (FY26 = interim_1 + interim_2 + final).
+    Prevents impossible outputs (e.g. 6/5 years paid).
+    """
+    if not isinstance(dividend_history, list):
+        return {"fy_dividends": {}, "years_paid_str": "0/5 years paid", "num_years_paid": 0, "regularity": "NONE"}
+
+    fy_totals = {}
+    for d in dividend_history:
+        if not isinstance(d, dict):
+            continue
+        dt_str = str(d.get("Date") or d.get("date") or "")
+        amt = first_known(d.get("Dividends"), d.get("Dividend"), d.get("amount"), d.get("value"))
+        if len(dt_str) >= 4 and dt_str[:4].isdigit():
+            yr = int(dt_str[:4])
+            month = int(dt_str[5:7]) if len(dt_str) >= 7 and dt_str[5:7].isdigit() else 6
+            fy = f"FY{yr + 1 if month >= 4 else yr}"
+            if amt is not None:
+                fy_totals[fy] = round(fy_totals.get(fy, 0.0) + float(amt), 2)
+
+    import datetime
+    cur_year = datetime.date.today().year
+    cur_fy_int = cur_year + 1 if datetime.date.today().month >= 4 else cur_year
+    last_5_fys = [f"FY{cur_fy_int - i}" for i in range(5)]
+    paid_fys = [fy for fy in last_5_fys if fy_totals.get(fy, 0) > 0]
+    num_paid = len(paid_fys)
+
+    return {
+        "fy_dividends": fy_totals,
+        "years_paid_str": f"{num_paid}/5 years paid",
+        "num_years_paid": num_paid,
+        "regularity": "REGULAR" if num_paid >= 4 else ("IRREGULAR" if num_paid >= 1 else "NONE")
+    }
+
+
 from data.sector_templates import classify_company_type
 
 
-def calculate_all_metrics(financial_data: Dict[str, Any]) -> Dict[str, Any]:
+def calculate_all_metrics(financial_data: Dict[str, Any], company_type: Optional[str] = None) -> Dict[str, Any]:
     """Master function. Takes raw financial statements and returns all computed metrics."""
     metrics = {}
 
@@ -344,24 +434,73 @@ def calculate_all_metrics(financial_data: Dict[str, Any]) -> Dict[str, Any]:
     name = info.get('longName') or info.get('shortName', '')
     symbol = info.get('symbol', '')
 
-    company_type = classify_company_type(sector, industry, name, symbol)
-    is_bank = (company_type == "BANK")
+    resolved_company_type = company_type or financial_data.get("company_type") or classify_company_type(sector, industry, name, symbol)
+    is_bank = (resolved_company_type == "BANK")
 
     # Get structured yearly lists
-    income_stmts = financial_data.get('annual_income_stmt') or financial_data.get('financials', {}).get('annual_income_stmt', [])
-    balance_sheets = financial_data.get('annual_balance_sheet') or financial_data.get('financials', {}).get('annual_balance_sheet', [])
-    cashflows = financial_data.get('annual_cashflow') or financial_data.get('financials', {}).get('annual_cashflow', [])
+    financials = financial_data.get('financials', {}) if isinstance(financial_data.get('financials'), dict) else {}
+    quarterly_income = financial_data.get('quarterly_income_stmt') or financials.get('quarterly_income_stmt', [])
+    quarterly_balance = financial_data.get('quarterly_balance_sheet') or financials.get('quarterly_balance_sheet', [])
+    quarterly_cashflow = financial_data.get('quarterly_cashflow') or financials.get('quarterly_cashflow', [])
+    annual_income = financial_data.get('annual_income_stmt') or financials.get('annual_income_stmt', [])
+    annual_balance = financial_data.get('annual_balance_sheet') or financials.get('annual_balance_sheet', [])
+    annual_cashflow = financial_data.get('annual_cashflow') or financials.get('annual_cashflow', [])
 
-    curr_income = income_stmts[0] if income_stmts else {}
-    curr_balance = balance_sheets[0] if balance_sheets else {}
-    curr_cashflow = cashflows[0] if cashflows else {}
+    use_quarterly = bool(quarterly_income)
+    income_stmts = quarterly_income if use_quarterly else annual_income
+    balance_sheets = quarterly_balance if use_quarterly else annual_balance
+    cashflows = quarterly_cashflow if use_quarterly else annual_cashflow
+    curr_income = latest_statement(income_stmts)
+    statement_scope = curr_income.get('statement_scope', UNKNOWN) if curr_income else UNKNOWN
+    curr_balance = latest_statement(balance_sheets, statement_scope) if balance_sheets else {}
+    curr_cashflow = latest_statement(cashflows, statement_scope) if cashflows else {}
 
     metrics['profitability'] = calculate_profitability(curr_income, curr_balance, is_bank=is_bank)
-    metrics['growth'] = calculate_growth(income_stmts)
+    metrics['growth'] = calculate_latest_period_yoy_growth(income_stmts) if use_quarterly else calculate_growth(income_stmts)
     metrics['debt_metrics'] = calculate_debt_metrics(curr_balance, curr_income, is_bank=is_bank)
 
     price = info.get('currentPrice') or info.get('regularMarketPrice') or 0.0
     metrics['valuation'] = calculate_valuation(price, info)
     metrics['cash_flow_quality'] = calculate_cash_flow_quality(curr_cashflow, curr_income)
+    latest_revenue = get_first_valid(curr_income, ['Total Revenue', 'Operating Revenue', 'Net Interest Income', 'Interest Income', 'Total Income'])
+    latest_profit = get_first_valid(curr_income, ['Net Income', 'Net Income Common Stockholders', 'Net Income Continuous Operations'])
+    metrics['financial_summary'] = {
+        'revenue': {
+            'value': latest_revenue,
+            'formatted_string': format_crore(latest_revenue),
+            'status': 'neutral',
+            'explanation': 'Revenue from the latest selected reporting period.',
+        },
+        'net_profit': {
+            'value': latest_profit,
+            'formatted_string': format_crore(latest_profit),
+            'status': 'neutral',
+            'explanation': 'Net profit from the latest selected reporting period.',
+        },
+    }
 
-    return metrics
+    # Track reported vs calculated ratio metadata
+    rep_de = info.get('debtToEquity')
+    calc_de = metrics['debt_metrics'].get('debt_to_equity', {}).get('value') if isinstance(metrics.get('debt_metrics'), dict) else None
+    
+    metrics['ratio_comparisons'] = {
+        "debt_to_equity": {
+            "reported": f"{rep_de/100:.2f}x" if rep_de is not None and isinstance(rep_de, (int, float)) else UNKNOWN,
+            "calculated": f"{calc_de:.2f}x" if calc_de is not None else UNKNOWN,
+            "differs": bool(rep_de is not None and calc_de is not None and abs((rep_de/100) - calc_de) > 0.2)
+        }
+    }
+
+    # Aggregate dividends by FY
+    raw_divs = financial_data.get('dividends', [])
+    if isinstance(raw_divs, dict) and "dividends" in raw_divs:
+        raw_divs = raw_divs["dividends"]
+    metrics['fy_dividends'] = aggregate_dividends_by_financial_year(raw_divs if isinstance(raw_divs, list) else [])
+    metrics['period_context'] = {
+        'selected_reporting_period': curr_income.get('reporting_period', UNKNOWN) if curr_income else UNKNOWN,
+        'statement_scope': statement_scope,
+        'period_end': curr_income.get('period_end', UNKNOWN) if curr_income else UNKNOWN,
+        'company_type': resolved_company_type,
+    }
+
+    return apply_metric_schema(metrics, curr_income)

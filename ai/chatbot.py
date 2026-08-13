@@ -75,7 +75,7 @@ class CompanyChatbot:
         return self._rule_based_qa(question, context)
 
     def _rule_based_qa(self, question: str, context: str) -> str:
-        """Direct fact-checked answer extraction from dossier data."""
+        """Extract an answer from the dossier while preserving its evidence status."""
         q = str(question).lower()
         modules = (self.dossier.get("modules") or {})
         profile = (modules.get("company_snapshot") or {})
@@ -107,7 +107,7 @@ class CompanyChatbot:
                 f"1. **Core Topline Revenue**: 1-Year Revenue CAGR stands at **{grow_1y}**.\n"
                 f"2. **Operating Profitability**: Operating Margin is recorded at **{op_margin}**.\n"
                 f"3. **Executive Insight**: {exec_sum[:300]}...\n\n"
-                f"*Source: {name} primary financial disclosures & exchange filings.*"
+                f"*Source: CCIE dossier evidence tracker; source status is shown with each claim.*"
             )
 
         elif "revenue" in q or "main source" in q or "business" in q or "what does" in q or "do" in q:
@@ -159,7 +159,7 @@ class CompanyChatbot:
         return (
             f"Based on the verified dossier for **{name}** (Current Price: ₹{float(price_val):,.2f}):\n\n"
             f"{exec_sum}\n\n"
-            f"*Source: Verified {name} dossier database.*"
+            f"*Source: CCIE dossier evidence tracker; verify source status before relying on this answer.*"
         )
 
     def get_suggested_questions(self) -> list[str]:

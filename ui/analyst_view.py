@@ -85,10 +85,33 @@ def render_analyst_view(dossier: dict):
             for q in sector_template.get("key_questions", []):
                 st.markdown(f"- ❓ {q}")
 
+        operating_metrics = computed.get("sector_operating", {}) if isinstance(computed, dict) else {}
+        operating_rows = []
+        if isinstance(operating_metrics, dict):
+            for metric_name, item in operating_metrics.items():
+                if not isinstance(item, dict):
+                    continue
+                evidence = item.get("evidence", {}) if isinstance(item.get("evidence"), dict) else {}
+                operating_rows.append({
+                    "Metric": str(metric_name).replace("_", " ").title(),
+                    "Value": item.get("formatted_string", "UNKNOWN"),
+                    "Period End": evidence.get("period_end", "UNKNOWN"),
+                    "Scope": evidence.get("statement_scope", "UNKNOWN"),
+                    "Source": evidence.get("source_type", "UNKNOWN"),
+                    "Page": evidence.get("page", "UNKNOWN"),
+                })
+        if operating_rows:
+            st.markdown("#### Extracted Sector Operating Evidence")
+            st.dataframe(pd.DataFrame(operating_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No primary-document sector operating metrics have been collected.")
+
     # ── 4. Detailed Red Flags & Forensic Audit ────────────────
     red_flags = modules.get("red_flags", [])
     render_section_header("Forensic Red Flags Audit", "🚩", "Automated quantitative checks")
-    if red_flags:
+    if not red_flags:
+        st.info("No quantitative red flags were generated from the available data. This is not a clean bill of health; missing evidence remains UNKNOWN.")
+    elif red_flags:
         for rf in red_flags:
             sev = rf.get("severity", "warning")
             color = "#f87171" if sev == "danger" else "#fbbf24"

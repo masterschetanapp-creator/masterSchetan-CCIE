@@ -5,10 +5,10 @@ Coordinates all research agents to build a complete stock dossier.
 import time
 import traceback
 from typing import Optional
-from config import CACHE_TTL
+from config import CACHE_TTL, EXCHANGE_FILING_FETCH_ENABLED
 
 
-def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dict:
+def build_dossier(symbol: str, company_name: str, progress_callback=None, primary_evidence: Optional[dict] = None) -> dict:
     """
     Master orchestrator. Builds a complete investment research dossier for a stock.
     
@@ -18,6 +18,9 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         symbol: NSE ticker symbol (e.g., 'RELIANCE.NS')
         company_name: Full company name
         progress_callback: Optional callable(step_name, progress_pct) for UI updates
+        primary_evidence: Optional approved filing index/documents supplied by a
+            primary-source adapter, upload workflow, or fixture. No evidence is
+            invented when it is omitted.
     
     Returns:
         Complete dossier dict with all 41 research modules
@@ -25,7 +28,8 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     from core.cache_manager import get_cached, set_cached, is_fresh
     from data.stock_fetcher import fetch_all_data
     from data.news_fetcher import fetch_company_news
-    from data.sector_templates import get_sector_template, classify_company_type, classify_sector
+    from data.sector_templates import get_sector_template, classify_company_type
+    from data.primary_evidence_collector import PrimaryEvidenceCollector, merge_primary_claims_into_metrics
     from analysis.financial_calculator import calculate_all_metrics
     from analysis.red_flag_engine import run_forensic_checks
     from analysis.source_tracker import SourceTracker
@@ -46,11 +50,18 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     }
 
     source_tracker = SourceTracker()
+    evidence_pack = primary_evidence if isinstance(primary_evidence, dict) else {}
+    has_supplied_primary_evidence = bool(evidence_pack.get("filing_index") or evidence_pack.get("documents"))
 
     # ── Step 1: Check cache for complete dossier ──────────────
     update_progress("Checking cache...", 5)
     cached_dossier = get_cached(symbol, "full_dossier")
-    if cached_dossier and is_fresh(symbol, "full_dossier"):
+    if (
+        not has_supplied_primary_evidence
+        and not EXCHANGE_FILING_FETCH_ENABLED
+        and cached_dossier
+        and is_fresh(symbol, "full_dossier")
+    ):
         # Check if dynamic sections need refresh
         needs_news_refresh = not is_fresh(symbol, "news")
         needs_price_refresh = not is_fresh(symbol, "price_data")
@@ -107,6 +118,87 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         "city": info.get("city", ""),
     }
 
+    # Resolve the canonical company type once. Every calculator, decision and
+    # renderer consumes this stored code instead of independently reclassifying.
+    company_type = classify_company_type(info.get("sector", ""), info.get("industry", ""), company_name, symbol)
+    dossier["company_type"] = company_type
+    dossier["modules"]["company_type"] = company_type
+    dossier["modules"]["sector_template"] = get_sector_template(company_type)
+
+    # Primary evidence may be supplied manually or collected from an enabled
+    # exchange adapter. Both paths require real source URLs and document IDs.
+    update_progress("Checking primary filing evidence...", 28)
+    primary_collector = PrimaryEvidenceCollector(symbol, company_name, company_type)
+    evidence_pack = evidence_pack or stock_data.get("primary_evidence", {})
+    evidence_pack = evidence_pack if isinstance(evidence_pack, dict) else {}
+    has_manual_primary_evidence = bool(evidence_pack.get("filing_index") or evidence_pack.get("documents"))
+    supplied_bse_scrip_code = evidence_pack.get("bse_scrip_code", "")
+    if not has_manual_primary_evidence and EXCHANGE_FILING_FETCH_ENABLED:
+        cached_primary_evidence = get_cached(symbol, "primary_evidence")
+        if isinstance(cached_primary_evidence, dict):
+            evidence_pack = cached_primary_evidence
+        else:
+            try:
+                from data.exchange_filings import ExchangeFilingCollector
+
+                bse_scrip_code = (
+                    supplied_bse_scrip_code or info.get("bseScripCode") or info.get("bse_scrip_code") or info.get("bseCode") or ""
+                )
+                evidence_pack = ExchangeFilingCollector().collect(
+                    symbol,
+                    bse_scrip_code=str(bse_scrip_code),
+                )
+                set_cached(symbol, "primary_evidence", evidence_pack)
+            except Exception as e:
+                evidence_pack = {"filing_index": [], "documents": [], "collection": {"mode": "EXCHANGE_DIRECT", "error": str(e)}}
+    elif not has_manual_primary_evidence:
+        evidence_pack = {
+            "filing_index": [],
+            "documents": [],
+            "bse_scrip_code": supplied_bse_scrip_code,
+            "collection": {"mode": "DISABLED"},
+        }
+    elif "collection" not in evidence_pack:
+        evidence_pack["collection"] = {"mode": "MANUAL_UPLOAD"}
+    try:
+        primary_collector.discover_primary_sources(evidence_pack.get("filing_index"))
+        primary_claims = primary_collector.extract_structured_claims(evidence_pack.get("documents"))
+        primary_evidence_result = primary_collector.to_dict()
+        collection_summary = dict(evidence_pack.get("collection", {"mode": "UNKNOWN"}))
+        collection_summary.setdefault("discovered_count", len(primary_evidence_result["discovered_sources"]))
+        collection_summary.setdefault("downloaded_count", primary_evidence_result["primary_document_count"])
+        collection_summary.setdefault(
+            "readable_text_count",
+            sum(
+                bool(document.get("text") or document.get("html") or document.get("pages"))
+                for document in evidence_pack.get("documents", [])
+                if isinstance(document, dict)
+            ),
+        )
+        primary_evidence_result["collection"] = collection_summary
+        dossier["modules"]["primary_evidence"] = primary_evidence_result
+        for claim in primary_claims:
+            source_tracker.add_claim(
+                claim=f"Primary document metric: {claim.get('metric')}",
+                value=claim.get("value"),
+                source=claim.get("document_title", "Primary document"),
+                source_type=claim.get("source_type", "Unverified Feed"),
+                source_date=claim.get("published_date"),
+                confidence=80,
+                verification_status=claim.get("verification_status", "UNVERIFIED"),
+                claim_type="FACT",
+                module="primary_evidence",
+                source_url=claim.get("source_url"),
+                source_document_id=claim.get("source_document_id"),
+                page=claim.get("page"),
+                evidence_snippet=claim.get("evidence_snippet"),
+                extraction_method=claim.get("extraction_method"),
+            )
+    except Exception as e:
+        primary_claims = []
+        dossier["modules"]["primary_evidence"] = primary_collector.to_dict()
+        dossier["errors"].append(f"Primary evidence collection error: {str(e)}")
+
     # ── Step 4: Extract price data ────────────────────────────
     update_progress("Processing price data...", 25)
     dossier["modules"]["price_data"] = stock_data.get("price_data", {})
@@ -114,11 +206,14 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     # ── Step 5: Financial calculations (CODE, not AI) ─────────
     update_progress("Running financial calculations...", 35)
     try:
-        computed_metrics = calculate_all_metrics(stock_data)
+        computed_metrics = calculate_all_metrics(stock_data, company_type=company_type)
+        computed_metrics = merge_primary_claims_into_metrics(computed_metrics, primary_claims)
         dossier["modules"]["computed_metrics"] = computed_metrics
 
         # Track calculated metrics source
         for metric_name in computed_metrics:
+            if metric_name in {"sector_operating", "primary_evidence"}:
+                continue
             source_tracker.add_claim(
                 claim=f"{metric_name} calculated",
                 value=computed_metrics[metric_name],
@@ -137,7 +232,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     # ── Step 6: Red-flag forensic checks (CODE, not AI) ───────
     update_progress("Running forensic red-flag checks...", 45)
     try:
-        red_flags = run_forensic_checks(stock_data, computed_metrics)
+        red_flags = run_forensic_checks(stock_data, computed_metrics, company_type=company_type)
         dossier["modules"]["red_flags"] = red_flags
         for rf in red_flags:
             source_tracker.add_claim(
@@ -191,7 +286,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     dossier["modules"]["holders"] = stock_data.get("holders", {})
     source_tracker.add_claim(
         claim=f"Shareholding Pattern & Insider Ownership",
-        value=f"Insiders {info.get('heldPercentInsiders', 0)*100:.1f}%",
+        value="Secondary holder data received; exchange taxonomy not verified.",
         source="Yahoo Finance API (yfinance)",
         source_type="Secondary Market Data Aggregator",
         confidence=85,
@@ -202,15 +297,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
 
     # ── Step 10: Canonical Company Classification & Sector Template ─────────
     update_progress("Classifying company & loading sector analysis template...", 60)
-    sector = info.get("sector", "")
-    industry = info.get("industry", "")
-    company_type = classify_company_type(sector, industry, company_name, symbol)
-    
-    dossier["company_type"] = company_type
-    dossier["modules"]["company_type"] = company_type
-    
-    sector_template = get_sector_template(company_type)
-    dossier["modules"]["sector_template"] = sector_template
+    sector_template = dossier["modules"]["sector_template"]
 
     # ── Step 10.1: Build Canonical Decision Support Object ──────────────────
     update_progress("Building unified decision support engine...", 61)
@@ -229,28 +316,44 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         )
         dossier["decision_support"] = decision_support
         dossier["modules"]["decision_support"] = decision_support
-        dossier["modules"]["common_man_report"] = decision_support
     except Exception as e:
         dossier["errors"].append(f"DecisionEngine error: {str(e)}")
         decision_support = {}
         traceback.print_exc()
 
+    # ── Step 10.2: Report Consistency & Completeness Validation ──────────────
+    try:
+        from analysis.report_consistency_validator import ReportConsistencyValidator
+        from analysis.report_completeness_validator import ReportCompletenessValidator
+        
+        c_val = ReportConsistencyValidator().validate_dossier_consistency(dossier)
+        dossier["consistency_check"] = c_val
+        
+        comp_val = ReportCompletenessValidator().validate_completeness(dossier)
+        dossier["completeness"] = comp_val
+        dossier["modules"]["completeness"] = comp_val
+    except Exception as e:
+        dossier["errors"].append(f"Validation error: {str(e)}")
+
     # ── Step 10.5: Generate Central Thesis (CTSO) ─────────────
     update_progress("Synthesizing central investment thesis...", 62)
     try:
-        from ai.thesis_synthesizer import generate_ctso
-        ctso = generate_ctso(stock_data, computed_metrics, red_flags, sector_template, news)
+        ctso = {
+            "archetype": "EVIDENCE_GATED",
+            "golden_thread": decision_support.get("bottom_line", "UNKNOWN") if isinstance(decision_support, dict) else "UNKNOWN",
+            "conviction_level": decision_support.get("coverage", {}).get("confidence", "UNKNOWN") if isinstance(decision_support, dict) else "UNKNOWN",
+        }
         dossier["modules"]["ctso"] = ctso
         if ctso:
             source_tracker.add_claim(
                 claim=f"Central Investment Thesis ({ctso.get('archetype', 'Synthesis')})",
                 value=ctso.get("golden_thread", "")[:100],
-                source="Multi-Model AI Thesis Engine (Gemini 2.5)",
-                source_type="AI Institutional Synthesis",
-                confidence=85,
-                verification_status="SECONDARY_ONLY",
-                claim_type="AI_INTERPRETATION",
-                module="ai_analysis"
+                source="Decision Support Engine",
+                source_type="Derived from CCIE secondary-data metrics",
+                confidence=70,
+                verification_status="DERIVED_FROM_SECONDARY",
+                claim_type="CALCULATION",
+                module="decision_support"
             )
     except Exception as e:
         dossier["errors"].append(f"CTSO generation error: {str(e)}")
@@ -313,7 +416,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         # Generate Common Man Report
         update_progress("Generating Common Man Equity Research report...", 89)
         common_man_report = agents.generate_common_man_report(stock_data_with_ctso, computed_metrics, red_flags, sector_template, news)
-        dossier["modules"]["common_man_report"] = common_man_report
+        dossier["modules"]["ai_common_man_narrative"] = common_man_report
 
         # Generate investor questions (not BUY/SELL)
         update_progress("Preparing investor decision questions...", 89)
@@ -349,13 +452,27 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     update_progress("Saving source evidence...", 95)
     dossier["modules"]["source_tracking"] = source_tracker.to_dict()
 
+    # Final render gate runs after all source claims are registered. A blocked
+    # dossier is preserved for diagnosis but must not be presented as a report.
+    try:
+        from analysis.report_consistency_validator import ReportConsistencyValidator
+        from analysis.report_completeness_validator import ReportCompletenessValidator
+        dossier["consistency_check"] = ReportConsistencyValidator().validate_dossier_consistency(dossier)
+        dossier["render_blocked"] = not dossier["consistency_check"].get("render_allowed", False)
+        dossier["completeness"] = ReportCompletenessValidator().validate_completeness(dossier)
+        dossier["modules"]["completeness"] = dossier["completeness"]
+    except Exception as e:
+        dossier["errors"].append(f"Final validation error: {str(e)}")
+        dossier["render_blocked"] = True
+
     # ── Step 14: Cache the complete dossier ────────────────────
     update_progress("Caching research for future visitors...", 98)
     dossier["from_cache"] = False
-    try:
-        set_cached(symbol, "full_dossier", dossier)
-    except Exception:
-        pass  # Cache failure is non-critical
+    if not has_supplied_primary_evidence:
+        try:
+            set_cached(symbol, "full_dossier", dossier)
+        except Exception:
+            pass  # Cache failure is non-critical
 
     update_progress("Research complete!", 100)
     return dossier
@@ -364,7 +481,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
 def _format_market_cap(value: float) -> str:
     """Format market cap in Indian number system (Crore/Lakh)."""
     if not value or value == 0:
-        return "N/A"
+        return "UNKNOWN"
     crore = value / 1e7
     if crore >= 100000:
         return f"₹{crore / 100000:.2f} Lakh Cr"
@@ -378,9 +495,11 @@ def _format_market_cap(value: float) -> str:
 def _build_research_summary(metrics: dict, red_flags: list, stock_data: dict, decision_support: dict = None, source_summary: dict = None) -> dict:
     """Build the Investment Research Summary table using canonical DecisionSupport."""
     if isinstance(decision_support, dict) and decision_support.get("business_health"):
-        biz_assess = "Strong" if "STRONG" in decision_support["business_health"].get("status", "") else ("Weak" if "WEAK" in decision_support["business_health"].get("status", "") else "Moderate")
-        growth_assess = "Strong" if decision_support.get("growth", {}).get("status") == "STRONG" else ("Weak" if decision_support.get("growth", {}).get("status") == "DECLINING" else "Moderate")
-        bal_assess = decision_support.get("financial_health", {}).get("status", "STABLE").replace("_", " ").title()
+        biz_status = decision_support["business_health"].get("status", "UNKNOWN")
+        growth_status = decision_support.get("growth", {}).get("status", "UNKNOWN")
+        biz_assess = "Strong" if "STRONG" in biz_status else ("Weak" if "WEAK" in biz_status else "Moderate" if biz_status == "MIXED" else "UNKNOWN")
+        growth_assess = "Strong" if growth_status == "STRONG" else ("Weak" if growth_status == "DECLINING" else "Moderate" if growth_status in {"MODERATE", "REVENUE_GROWING", "STAGNANT"} else "UNKNOWN")
+        bal_assess = decision_support.get("financial_health", {}).get("status", "UNKNOWN").replace("_", " ").title()
         val_assess = decision_support.get("valuation", {}).get("verdict_label", "Data shown without recommendation")
         conf_label = source_summary.get("status", "MEDIUM") if isinstance(source_summary, dict) else "MEDIUM"
 
@@ -417,7 +536,7 @@ def _identify_key_risk(red_flags: list, metrics: dict) -> str:
     warning_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "warning"]
     if warning_flags:
         return warning_flags[0].get("title", "See warnings")
-    return "No major risks identified"
+    return "UNKNOWN - no evidence-backed risk ranking is available"
 
 
 def _identify_key_catalyst(growth: dict, stock_data: dict) -> str:
@@ -427,16 +546,18 @@ def _identify_key_catalyst(growth: dict, stock_data: dict) -> str:
         return "Strong revenue growth momentum"
     elif revenue_growth and revenue_growth > 10:
         return "Steady growth trajectory"
-    return "Monitor for catalysts"
+    return "UNKNOWN - no evidence-backed catalyst is available"
 
 
-def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict, company_type: str = "DEFAULT", decision_support: dict = None) -> dict:
+def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict, company_type: str = "UNKNOWN", decision_support: dict = None) -> dict:
     """Compute the Research Snapshot diagnostic matrix from actual data and decision_support."""
     market_cap = info.get("marketCap", 0)
     
     # Business Scale
     cap_cr = market_cap / 1e7 if isinstance(market_cap, (int, float)) else 0
-    if cap_cr >= 100000:
+    if not isinstance(market_cap, (int, float)) or market_cap <= 0:
+        business_scale = "UNKNOWN"
+    elif cap_cr >= 100000:
         business_scale = "Mega Cap"
     elif cap_cr >= 20000:
         business_scale = "Large Cap"
@@ -448,11 +569,11 @@ def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict, compa
         business_scale = "Micro Cap"
 
     if isinstance(decision_support, dict) and decision_support.get("financial_health"):
-        solvency = decision_support["financial_health"].get("status", "STABLE").replace("_", " ").title()
-        growth_mom = decision_support.get("growth", {}).get("status", "STABLE").replace("_", " ").title()
+        solvency = decision_support["financial_health"].get("status", "UNKNOWN").replace("_", " ").title()
+        growth_mom = decision_support.get("growth", {}).get("status", "UNKNOWN").replace("_", " ").title()
     else:
-        solvency = "Comfortable"
-        growth_mom = "Stable"
+        solvency = "UNKNOWN"
+        growth_mom = "UNKNOWN"
 
     prof = metrics.get("profitability", {}) if isinstance(metrics.get("profitability"), dict) else {}
     roe = prof.get("roe", {}).get("value") if isinstance(prof.get("roe"), dict) else None
@@ -474,7 +595,7 @@ def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict, compa
     elif warning_flags:
         governance = "Some Concerns"
     else:
-        governance = "Clean"
+        governance = "UNKNOWN - no governance conclusion can be drawn from no flags"
 
     return {
         "business_scale": business_scale,

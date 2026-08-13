@@ -4,17 +4,19 @@ masterSchetan CCIE — Forensic Red Flag Engine
 """
 
 from typing import Dict, Any, List
+from analysis.metric_schema import UNKNOWN
 
-def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
+def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[str, Any], company_type: str = UNKNOWN) -> List[Dict[str, Any]]:
     """
     Run 15 forensic checks on financial data and computed metrics.
     Returns ONLY actual detected flags/warnings.
     """
     flags = []
 
-    income_stmts = financial_data.get('annual_income_stmt') or financial_data.get('financials', {}).get('annual_income_stmt', [])
-    balance_sheets = financial_data.get('annual_balance_sheet') or financial_data.get('financials', {}).get('annual_balance_sheet', [])
-    cashflows = financial_data.get('annual_cashflow') or financial_data.get('financials', {}).get('annual_cashflow', [])
+    financials = financial_data.get('financials', {}) if isinstance(financial_data.get('financials'), dict) else {}
+    income_stmts = financial_data.get('quarterly_income_stmt') or financials.get('quarterly_income_stmt') or financial_data.get('annual_income_stmt') or financials.get('annual_income_stmt', [])
+    balance_sheets = financial_data.get('quarterly_balance_sheet') or financials.get('quarterly_balance_sheet') or financial_data.get('annual_balance_sheet') or financials.get('annual_balance_sheet', [])
+    cashflows = financial_data.get('quarterly_cashflow') or financials.get('quarterly_cashflow') or financial_data.get('annual_cashflow') or financials.get('annual_cashflow', [])
 
     # Check 1: Profit Quality (CFO/PAT < 0.6)
     cfo_pat_metric = computed_metrics.get('cash_flow_quality', {}).get('cfo_to_pat')
@@ -130,7 +132,7 @@ def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[s
 
     # Check 8: Promoter Pledge Risk
     info = financial_data.get('info', {})
-    pledge_pct = info.get('pledgedShares', 0) or 0
+    pledge_pct = None  # Requires a primary exchange pledge filing.
     if isinstance(pledge_pct, (int, float)) and pledge_pct > 10.0:
         severity = 'danger' if pledge_pct > 25.0 else 'warning'
         flags.append({
@@ -143,7 +145,7 @@ def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[s
         })
 
     # Check 9: Promoter Stake Decline
-    insider_pct = info.get('heldPercentInsiders')
+    insider_pct = None  # Yahoo insider fields are not the NSE/BSE promoter taxonomy.
     if isinstance(insider_pct, (int, float)) and insider_pct < 0.15 and not any(k in info.get('sector', '') for k in ['Bank', 'Financial']):
         flags.append({
             'id': 9,
@@ -169,7 +171,7 @@ def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[s
             'what_it_means': "Input cost inflation, price discounting, or rising operating costs are eroding profitability."
         })
 
-    # Check 11: Inventory Accumulation (Inventory growing > 1.5x faster than sales)
+    # Check 11: Inventory Accumulation (Sector-Aware)
     if len(income_stmts) >= 2 and len(balance_sheets) >= 2:
         curr_inc, prev_inc = income_stmts[0], income_stmts[1]
         curr_bs, prev_bs = balance_sheets[0], balance_sheets[1]
@@ -182,14 +184,24 @@ def run_forensic_checks(financial_data: Dict[str, Any], computed_metrics: Dict[s
             rev_g = (curr_rev - prev_rev) / prev_rev
             inv_g = (curr_inv - prev_inv) / prev_inv
             if inv_g > (1.5 * rev_g) and inv_g > 0.10:
-                flags.append({
-                    'id': 11,
-                    'severity': 'warning',
-                    'title': 'Inventory Accumulation Bloat',
-                    'finding': f"Inventory grew {inv_g*100:.1f}% YoY vs revenue growth of {rev_g*100:.1f}%.",
-                    'explanation': "Unsold finished goods or raw materials are piling up faster than sales.",
-                    'what_it_means': "Signals potential demand slowdown, overproduction, or inventory write-down risk."
-                })
+                if company_type in {"OIL_GAS_E&P", "OIL_GAS_INTEGRATED", "REFINING_MARKETING", "GAS_TRANSMISSION"}:
+                    flags.append({
+                        'id': 11,
+                        'severity': 'info',
+                        'title': 'Oil & Gas Feedstock / Petroleum Inventory Watch',
+                        'finding': f"Inventory value changed by {inv_g*100:.1f}% YoY vs revenue growth of {rev_g*100:.1f}%.",
+                        'explanation': "Inventory movements reflect operational crude oil feedstock, petroleum products, and international commodity price dynamics across energy/refining operations.",
+                        'what_it_means': "Reflects crude stocking and crude price valuation rather than consumer overproduction. Monitor refining throughput and GRMs."
+                    })
+                else:
+                    flags.append({
+                        'id': 11,
+                        'severity': 'warning',
+                        'title': 'Inventory Accumulation Bloat',
+                        'finding': f"Inventory grew {inv_g*100:.1f}% YoY vs revenue growth of {rev_g*100:.1f}%.",
+                        'explanation': "Unsold finished goods or raw materials are piling up faster than sales.",
+                        'what_it_means': "Signals potential demand slowdown, overproduction, or inventory write-down risk."
+                    })
 
     # Check 12: Contingent Liability Exposure
     cont_liab = info.get('contingentLiabilities', 0)
