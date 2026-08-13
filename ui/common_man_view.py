@@ -178,6 +178,7 @@ def _generate_empirical_common_man_verdict(company_name: str, symbol: str, secto
         div_matrix = "NONE"
 
     # 5. Sector-Specific Valuation Engine
+    sec_ind_text = f"{str(sector_name or '').lower()} {str(info.get('industry', '')).lower()}"
     is_metals = any(k in sec_ind_text for k in ["metal", "steel", "mining", "aluminium", "copper", "iron"])
     is_tech_retail = any(k in sec_ind_text for k in ["tech", "software", "it services", "retail", "internet", "e-commerce"])
 
