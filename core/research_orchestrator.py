@@ -25,7 +25,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     from core.cache_manager import get_cached, set_cached, is_fresh
     from data.stock_fetcher import fetch_all_data
     from data.news_fetcher import fetch_company_news
-    from data.sector_templates import get_sector_template
+    from data.sector_templates import get_sector_template, classify_sector
     from analysis.financial_calculator import calculate_all_metrics
     from analysis.red_flag_engine import run_forensic_checks
     from analysis.source_tracker import SourceTracker
