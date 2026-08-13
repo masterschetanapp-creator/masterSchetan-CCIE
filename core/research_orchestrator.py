@@ -200,12 +200,40 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         module="shareholding"
     )
 
-    # ── Step 10: Sector-specific template ─────────────────────
-    update_progress("Loading sector analysis template...", 60)
+    # ── Step 10: Canonical Company Classification & Sector Template ─────────
+    update_progress("Classifying company & loading sector analysis template...", 60)
     sector = info.get("sector", "")
     industry = info.get("industry", "")
-    sector_template = classify_sector(sector, industry, company_name, symbol)
+    company_type = classify_company_type(sector, industry, company_name, symbol)
+    
+    dossier["company_type"] = company_type
+    dossier["modules"]["company_type"] = company_type
+    
+    sector_template = get_sector_template(company_type)
     dossier["modules"]["sector_template"] = sector_template
+
+    # ── Step 10.1: Build Canonical Decision Support Object ──────────────────
+    update_progress("Building unified decision support engine...", 61)
+    try:
+        from analysis.decision_engine import DecisionEngine
+        engine = DecisionEngine()
+        evidence_summary = source_tracker.get_confidence_summary()
+        decision_support = engine.build(
+            dossier=dossier,
+            company_type=company_type,
+            computed_metrics=computed_metrics,
+            evidence_summary=evidence_summary,
+            red_flags=red_flags,
+            dividends=stock_data.get("dividends", []),
+            news=news
+        )
+        dossier["decision_support"] = decision_support
+        dossier["modules"]["decision_support"] = decision_support
+        dossier["modules"]["common_man_report"] = decision_support
+    except Exception as e:
+        dossier["errors"].append(f"DecisionEngine error: {str(e)}")
+        decision_support = {}
+        traceback.print_exc()
 
     # ── Step 10.5: Generate Central Thesis (CTSO) ─────────────
     update_progress("Synthesizing central investment thesis...", 62)
@@ -233,7 +261,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     # ── Step 10.6: Compute dynamic Research Snapshot ──────────
     update_progress("Computing research diagnostic snapshot...", 63)
     try:
-        research_snapshot = _compute_research_snapshot(computed_metrics, red_flags, info)
+        research_snapshot = _compute_research_snapshot(computed_metrics, red_flags, info, company_type, decision_support)
         dossier["modules"]["research_snapshot"] = research_snapshot
     except Exception as e:
         dossier["errors"].append(f"Research snapshot error: {str(e)}")
@@ -314,7 +342,7 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
     # ── Step 12: Investment Research Summary ───────────────────
     update_progress("Compiling investment research summary...", 93)
     dossier["modules"]["research_summary"] = _build_research_summary(
-        computed_metrics, red_flags, stock_data
+        computed_metrics, red_flags, stock_data, decision_support, evidence_summary
     )
 
     # ── Step 13: Save source tracking ─────────────────────────
@@ -347,66 +375,46 @@ def _format_market_cap(value: float) -> str:
         return f"₹{lakh:,.0f} Lakh"
 
 
-def _build_research_summary(metrics: dict, red_flags: list, stock_data: dict) -> dict:
-    """Build the Investment Research Summary table (SEBI-safe, no BUY/SELL)."""
-    info = stock_data.get("info", {})
+def _build_research_summary(metrics: dict, red_flags: list, stock_data: dict, decision_support: dict = None, source_summary: dict = None) -> dict:
+    """Build the Investment Research Summary table using canonical DecisionSupport."""
+    if isinstance(decision_support, dict) and decision_support.get("business_health"):
+        biz_assess = "Strong" if "STRONG" in decision_support["business_health"].get("status", "") else ("Weak" if "WEAK" in decision_support["business_health"].get("status", "") else "Moderate")
+        growth_assess = "Strong" if decision_support.get("growth", {}).get("status") == "STRONG" else ("Weak" if decision_support.get("growth", {}).get("status") == "DECLINING" else "Moderate")
+        bal_assess = decision_support.get("financial_health", {}).get("status", "STABLE").replace("_", " ").title()
+        val_assess = decision_support.get("valuation", {}).get("verdict_label", "Data shown without recommendation")
+        conf_label = source_summary.get("status", "MEDIUM") if isinstance(source_summary, dict) else "MEDIUM"
 
-    def assess(metric_dict: dict, key: str, good_threshold: float, 
-               bad_threshold: float, higher_is_better: bool = True) -> str:
-        val = metric_dict.get(key, {}).get("value") if isinstance(metric_dict.get(key), dict) else None
-        if val is None:
-            return "Data unavailable"
-        if higher_is_better:
-            if val >= good_threshold:
-                return "Strong"
-            elif val >= bad_threshold:
-                return "Moderate"
-            else:
-                return "Weak"
-        else:
-            if val <= good_threshold:
-                return "Strong"
-            elif val <= bad_threshold:
-                return "Moderate"
-            else:
-                return "Weak"
+        danger_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "danger"]
+        warning_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "warning"]
+        gov_str = f"{len(danger_flags)} danger flags" if danger_flags else (f"{len(warning_flags)} monitor items" if warning_flags else "Clean")
 
-    profitability = metrics.get("profitability", {})
-    growth = metrics.get("growth", {})
-    debt = metrics.get("debt_metrics", {})
-    cashflow = metrics.get("cash_flow_quality", {})
-
-    # Count material red flags
-    danger_flags = [f for f in red_flags if f.get("severity") == "danger"]
-    warning_flags = [f for f in red_flags if f.get("severity") == "warning"]
-
-    governance = "None material identified"
-    if danger_flags:
-        governance = f"{len(danger_flags)} concerns identified"
-    elif warning_flags:
-        governance = f"{len(warning_flags)} items to monitor"
+        return {
+            "dimensions": [
+                {"dimension": "Business quality", "assessment": biz_assess},
+                {"dimension": "Revenue visibility", "assessment": growth_assess},
+                {"dimension": "Balance sheet", "assessment": bal_assess},
+                {"dimension": "Cash generation", "assessment": "Evaluated in CFO/PAT"},
+                {"dimension": "Governance flags", "assessment": gov_str},
+                {"dimension": "Valuation", "assessment": val_assess},
+                {"dimension": "Key risk", "assessment": _identify_key_risk(red_flags, metrics)},
+                {"dimension": "Key catalyst", "assessment": _identify_key_catalyst(metrics.get("growth", {}), stock_data)},
+                {"dimension": "Information confidence", "assessment": conf_label},
+            ]
+        }
 
     return {
         "dimensions": [
-            {"dimension": "Business quality", "assessment": assess(profitability, "roce", 15, 10) if profitability.get("roce") else assess(profitability, "roe", 15, 10)},
-            {"dimension": "Revenue visibility", "assessment": assess(growth, "revenue_cagr_3y", 10, 5) if growth.get("revenue_cagr_3y") else assess(growth, "revenue_cagr_1y", 10, 0)},
-            {"dimension": "Balance sheet", "assessment": assess(debt, "debt_to_equity", 0.5, 1.5, higher_is_better=False)},
-            {"dimension": "Cash generation", "assessment": assess(cashflow, "cfo_to_pat", 0.8, 0.5)},
-            {"dimension": "Governance flags", "assessment": governance},
-            {"dimension": "Valuation", "assessment": "Data shown without recommendation"},
-            {"dimension": "Key risk", "assessment": _identify_key_risk(red_flags, metrics)},
-            {"dimension": "Key catalyst", "assessment": _identify_key_catalyst(growth, stock_data)},
-            {"dimension": "Information confidence", "assessment": "High"},
+            {"dimension": "Information confidence", "assessment": "UNVERIFIED"}
         ]
     }
 
 
 def _identify_key_risk(red_flags: list, metrics: dict) -> str:
     """Identify the single most important risk."""
-    danger_flags = [f for f in red_flags if f.get("severity") == "danger"]
+    danger_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "danger"]
     if danger_flags:
         return danger_flags[0].get("title", "See red flags")
-    warning_flags = [f for f in red_flags if f.get("severity") == "warning"]
+    warning_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "warning"]
     if warning_flags:
         return warning_flags[0].get("title", "See warnings")
     return "No major risks identified"
@@ -414,7 +422,7 @@ def _identify_key_risk(red_flags: list, metrics: dict) -> str:
 
 def _identify_key_catalyst(growth: dict, stock_data: dict) -> str:
     """Identify a potential catalyst."""
-    revenue_growth = growth.get("revenue_cagr_3yr", {}).get("value") if isinstance(growth.get("revenue_cagr_3yr"), dict) else None
+    revenue_growth = growth.get("revenue_cagr_1y", {}).get("value") if isinstance(growth.get("revenue_cagr_1y"), dict) else None
     if revenue_growth and revenue_growth > 15:
         return "Strong revenue growth momentum"
     elif revenue_growth and revenue_growth > 10:
@@ -422,12 +430,12 @@ def _identify_key_catalyst(growth: dict, stock_data: dict) -> str:
     return "Monitor for catalysts"
 
 
-def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict) -> dict:
-    """Compute the Research Snapshot diagnostic matrix from actual data."""
+def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict, company_type: str = "DEFAULT", decision_support: dict = None) -> dict:
+    """Compute the Research Snapshot diagnostic matrix from actual data and decision_support."""
     market_cap = info.get("marketCap", 0)
     
     # Business Scale
-    cap_cr = market_cap / 1e7
+    cap_cr = market_cap / 1e7 if isinstance(market_cap, (int, float)) else 0
     if cap_cr >= 100000:
         business_scale = "Mega Cap"
     elif cap_cr >= 20000:
@@ -438,87 +446,40 @@ def _compute_research_snapshot(metrics: dict, red_flags: list, info: dict) -> di
         business_scale = "Small Cap"
     else:
         business_scale = "Micro Cap"
-    
-    # Revenue Momentum
-    growth = metrics.get("growth", {})
-    rev_1y = growth.get("revenue_cagr_1y", {}).get("value") if isinstance(growth.get("revenue_cagr_1y"), dict) else None
-    if rev_1y is None:
-        revenue_momentum = "Data Unavailable"
-    elif rev_1y > 20:
-        revenue_momentum = "Accelerating"
-    elif rev_1y > 10:
-        revenue_momentum = "Growing"
-    elif rev_1y > 0:
-        revenue_momentum = "Stable"
-    elif rev_1y > -5:
-        revenue_momentum = "Stagnating"
+
+    if isinstance(decision_support, dict) and decision_support.get("financial_health"):
+        solvency = decision_support["financial_health"].get("status", "STABLE").replace("_", " ").title()
+        growth_mom = decision_support.get("growth", {}).get("status", "STABLE").replace("_", " ").title()
     else:
-        revenue_momentum = "Declining"
-    
-    # Solvency Position
-    debt = metrics.get("debt_metrics", {})
-    de = debt.get("debt_to_equity", {}).get("value") if isinstance(debt.get("debt_to_equity"), dict) else None
-    icr = debt.get("interest_coverage", {}).get("value") if isinstance(debt.get("interest_coverage"), dict) else None
-    if de is None:
-        solvency = "Data Unavailable"
-    elif de < 0.3 and (icr is None or icr > 5):
-        solvency = "Fortress"
-    elif de < 0.8:
         solvency = "Comfortable"
-    elif de < 1.5:
-        solvency = "Adequate"
-    elif de < 2.5:
-        solvency = "Stretched"
-    else:
-        solvency = "Distressed"
-    
-    # Capital Adequacy (based on ROE/ROCE)
-    prof = metrics.get("profitability", {})
+        growth_mom = "Stable"
+
+    prof = metrics.get("profitability", {}) if isinstance(metrics.get("profitability"), dict) else {}
     roe = prof.get("roe", {}).get("value") if isinstance(prof.get("roe"), dict) else None
     if roe is None:
-        capital_adequacy = "Data Unavailable"
+        cap_eff = "Data Unavailable"
     elif roe > 20:
-        capital_adequacy = "Excellent"
+        cap_eff = "Excellent (ROE > 20%)"
     elif roe > 15:
-        capital_adequacy = "Strong"
+        cap_eff = "Strong (ROE > 15%)"
     elif roe > 10:
-        capital_adequacy = "Adequate"
-    elif roe > 5:
-        capital_adequacy = "Tight"
+        cap_eff = "Adequate"
     else:
-        capital_adequacy = "Inadequate"
-    
-    # Earnings Quality
-    cf = metrics.get("cash_flow_quality", {})
-    cfo_pat = cf.get("cfo_to_pat", {}).get("value") if isinstance(cf.get("cfo_to_pat"), dict) else None
-    if cfo_pat is None:
-        earnings_quality = "Data Unavailable"
-    elif cfo_pat > 1.0:
-        earnings_quality = "Excellent"
-    elif cfo_pat > 0.75:
-        earnings_quality = "Good"
-    elif cfo_pat > 0.5:
-        earnings_quality = "Average"
-    elif cfo_pat > 0.25:
-        earnings_quality = "Below Average"
-    else:
-        earnings_quality = "Poor"
-    
-    # Governance Flags
-    danger_flags = [f for f in red_flags if f.get("severity") == "danger"]
-    warning_flags = [f for f in red_flags if f.get("severity") == "warning"]
+        cap_eff = "Subpar"
+
+    danger_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "danger"]
+    warning_flags = [f for f in red_flags if isinstance(f, dict) and f.get("severity") == "warning"]
     if danger_flags:
         governance = "Critical Issues"
     elif warning_flags:
         governance = "Some Concerns"
     else:
         governance = "Clean"
-    
+
     return {
         "business_scale": business_scale,
-        "revenue_momentum": revenue_momentum,
+        "revenue_momentum": growth_mom,
         "solvency_position": solvency,
-        "capital_adequacy": capital_adequacy,
-        "earnings_quality": earnings_quality,
+        "capital_efficiency": cap_eff,
         "governance_flags": governance,
     }
