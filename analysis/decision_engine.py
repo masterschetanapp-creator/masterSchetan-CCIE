@@ -83,6 +83,7 @@ class DecisionEngine:
         is_nbfc = (c_type == "NBFC")
         is_wind = (c_type == "WIND_EQUIPMENT")
         is_metals = (c_type == "METALS")
+        is_ep = (c_type in ["OIL_GAS_E&P", "OIL_GAS_INTEGRATED"])
         is_tech = (c_type in ["IT", "RETAIL"])
 
         # ── 1. Extract Metrics ──────────────────────────────────────

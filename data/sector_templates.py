@@ -130,6 +130,44 @@ SECTOR_METRICS: dict[str, dict] = {
             "Are expansion projects on track without cost overruns?"
         ],
         "analysis_template": "Monitor global macro factors, leverage, and cost curve positioning."
+    },
+    "oil_gas_ep": {
+        "name": "Oil & Gas Exploration & Production (E&P)",
+        "metrics": [
+            "Crude Oil Production (MMT)", "Natural Gas Production (BCM)", "Total BOE Production",
+            "Crude Realization ($/bbl)", "Gas Realization ($/mmbtu)", "Reserve Replacement Ratio (RRR)",
+            "Proven Reserves (2P/1P)", "Lifting Cost ($/bbl)", "Exploration Capex",
+            "Development Capex", "Major Discoveries", "Production Guidance", "ONGC Videsh / Overseas E&P",
+            "Crude Price Sensitivity", "USD/INR Sensitivity", "Royalty & Cess Impact"
+        ],
+        "key_questions": [
+            "Is domestic crude and natural gas production growing or stabilizing?",
+            "What are the net crude ($/bbl) and gas ($/mmbtu) realizations after windfall tax/cess?",
+            "Is the Reserve Replacement Ratio (RRR) above 1.0x to sustain long-term reserves?",
+            "Are major offshore development projects (e.g. KG-DWN-98/2, Mumbai High) on schedule?",
+            "How are overseas E&P subsidiaries (e.g. ONGC Videsh) and refining subsidiaries contributing to consolidated cash flows?"
+        ],
+        "analysis_template": "Analyze upstream crude/gas production volumes, net realizations, offshore project commissioning, reserve replacement, and government regulatory/cess impact."
+    },
+    "refining_marketing": {
+        "name": "Oil Refining & Petroleum Marketing",
+        "metrics": ["Gross Refining Margin (GRM $/bbl)", "Refinery Throughput (MMT)", "Marketing Sales Volume", "Pipeline Throughput", "Petrochemical Margins", "Inventory Realization"],
+        "key_questions": [
+            "How are Gross Refining Margins (GRMs) trending relative to regional benchmarks?",
+            "Are petroleum marketing margins sufficient to cover distribution overheads?",
+            "What is the refinery capacity utilization?"
+        ],
+        "analysis_template": "Evaluate refining margins (GRM $/bbl), crude processing throughput, marketing retail margins, and inventory gains/losses."
+    },
+    "gas_transmission": {
+        "name": "Natural Gas Transmission & Distribution",
+        "metrics": ["Gas Transmission Volume (MMSCMD)", "Tariff Realization", "City Gas Distribution (CGD) Volume", "PNG/CNG Mix", "APM Gas Allocation"],
+        "key_questions": [
+            "What is the daily gas transmission throughput (MMSCMD)?",
+            "Are regulatory tariffs per MMBTU stable?",
+            "How is CNG and PNG volume growth trending in city gas networks?"
+        ],
+        "analysis_template": "Focus on pipeline throughput, PNGRB tariff revisions, and city gas volume traction."
     }
 }
 
@@ -138,7 +176,8 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
     """
     Normalizes sector + industry + company_name + symbol into a single canonical company_type string code.
     Must return one of: "BANK", "NBFC", "INSURANCE", "IT", "PHARMA", "AUTO", "WIND_EQUIPMENT", 
-    "CAPITAL_GOODS", "DEFENCE", "RETAIL", "FMCG", "REAL_ESTATE", "METALS", "UTILITIES", "TELECOM", "ENERGY", "DEFAULT".
+    "OIL_GAS_E&P", "OIL_GAS_INTEGRATED", "REFINING_MARKETING", "GAS_TRANSMISSION", "OILFIELD_SERVICES",
+    "CAPITAL_GOODS", "DEFENCE", "RETAIL", "FMCG", "REAL_ESTATE", "METALS", "UTILITIES", "TELECOM", "DEFAULT".
     """
     s_lower = str(sector or "").lower()
     i_lower = str(industry or "").lower()
@@ -151,89 +190,102 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
     if "suzlon" in text or "wind turbine" in text or "wind equipment" in text or "wind generator" in text:
         return "WIND_EQUIPMENT"
 
-    # 2. Banking (PSU & Private Banks — PNB, MAHABANK, SBI, HDFC Bank, ICICI, Axis, etc.)
+    # 2. Oil & Gas Sub-Sectors (MUST PRECEDE generic utilities and metals!)
+    if any(k in sym_upper for k in ["ONGC", "OIL"]) or \
+       any(k in c_lower for k in ["oil and natural gas", "ongc", "oil india"]) or \
+       ("exploration" in text and "oil" in text):
+        return "OIL_GAS_E&P"
+
+    if "RELIANCE" in sym_upper or "reliance industries" in c_lower:
+        return "OIL_GAS_INTEGRATED"
+
+    if any(k in sym_upper for k in ["IOC", "BPCL", "HPCL", "MRPL", "CHENNPETRO"]) or \
+       any(k in c_lower for k in ["indian oil", "bharat petroleum", "hindustan petroleum", "mangalor refinery"]):
+        return "REFINING_MARKETING"
+
+    if any(k in sym_upper for k in ["GAIL", "GUJGASLTD", "IGL", "MGL", "ATGL"]) or \
+       any(k in c_lower for k in ["gail", "indraprastha gas", "mahanagar gas", "gujarat gas", "adani total gas"]) or \
+       ("gas transmission" in text or "gas distribution" in text):
+        return "GAS_TRANSMISSION"
+
+    # 3. Banking (PSU & Private Banks — PNB, MAHABANK, SBI, HDFC Bank, ICICI, Axis, etc.)
     if any(k in sym_upper for k in ["PNB", "MAHABANK", "SBIN", "HDFCBANK", "ICICIBANK", "AXISBANK", "KOTAKBANK", "CANBK", "UNIONBANK", "BANKBARODA", "INDUSINDBK"]) or \
        any(k in c_lower for k in ["punjab national bank", "bank of maharashtra", "state bank of india", "hdfc bank", "icici bank", "axis bank", "kotak mahindra bank"]) or \
        ("bank" in text and not any(k in text for k in ["nbfc", "housing", "microfinance", "small finance"])):
         return "BANK"
 
-    # 3. NBFC & Financial Services (Bajaj Finance, Chola, Shriram, Jio Financial, etc.)
+    # 4. NBFC & Financial Services (Bajaj Finance, Chola, Shriram, Jio Financial, etc.)
     if any(k in sym_upper for k in ["BAJFINANCE", "BAJAJFINSV", "CHOLAFIN", "SHRIRAMFIN", "MUTHOOTFIN", "JIOFIN", "M&MFIN", "POONAWALLA"]) or \
        any(k in c_lower for k in ["bajaj finance", "chola", "shriram finance", "muthoot", "jio financial"]) or \
        any(k in text for k in ["nbfc", "non-banking", "housing finance", "asset management", "microfinance", "lending"]):
         return "NBFC"
 
-    # 4. Insurance (HDFC Life, SBI Life, ICICI Pru, LIC, GIC, etc.)
+    # 5. Insurance (HDFC Life, SBI Life, ICICI Pru, LIC, GIC, etc.)
     if any(k in sym_upper for k in ["HDFCLIFE", "SBILIFE", "ICICIPRULI", "LICI", "GICRE", "NIACL"]) or \
        any(k in c_lower for k in ["hdfc life", "sbi life", "life insurance", "general insurance", "lic of india"]) or \
        "insurance" in text:
         return "INSURANCE"
 
-    # 5. Automotive & Vehicles (Tata Motors PV/CV, Maruti, M&M, Bajaj Auto, Eicher, Hero)
+    # 6. Automotive & Vehicles (Tata Motors PV/CV, Maruti, M&M, Bajaj Auto, Eicher, Hero)
     if any(k in sym_upper for k in ["TMPV", "TMCV", "TATAMOTORS", "MARUTI", "M&M", "BAJAJ-AUTO", "EICHERMOT", "HEROMOTOCO", "TVSMOTOR", "ASHOKLEY"]) or \
        any(k in c_lower for k in ["tata motors", "maruti", "mahindra", "bajaj auto", "eicher", "hero motocorp", "ashok leyland"]) or \
        any(k in text for k in ["auto", "vehicle", "automobile", "truck", "motorcycle", "passenger vehicle", "commercial vehicle"]):
         return "AUTO"
 
-    # 6. IT & Technology (Infosys, TCS, Wipro, HCL Tech, Tech Mahindra, LTIM)
+    # 7. IT & Technology (Infosys, TCS, Wipro, HCL Tech, Tech Mahindra, LTIM)
     if any(k in sym_upper for k in ["INFY", "TCS", "WIPRO", "HCLTECH", "TECHM", "LTIM", "PERSISTENT", "COFORGE", "MPHASIS"]) or \
        any(k in c_lower for k in ["infosys", "tata consultancy", "wipro", "hcl tech", "tech mahindra"]) or \
        any(k in text for k in ["it services", "software", "technology", "digital services"]):
         return "IT"
 
-    # 7. Pharma & Healthcare (Sun Pharma, Cipla, Dr Reddy's, Divi's, Lupin)
+    # 8. Pharma & Healthcare (Sun Pharma, Cipla, Dr Reddy's, Divi's, Lupin)
     if any(k in sym_upper for k in ["SUNPHARMA", "CIPLA", "DRREDDY", "DIVISLAB", "LUPIN", "MANKIND", "APOLLOHOSP", "MAXHEALTH"]) or \
        any(k in c_lower for k in ["sun pharma", "cipla", "dr reddy", "divi's", "lupin"]) or \
        any(k in text for k in ["pharma", "pharmaceutical", "drug", "biotech", "healthcare", "hospital"]):
         return "PHARMA"
 
-    # 8. Defense Equipment & Shipbuilding
+    # 9. Defense Equipment & Shipbuilding
     if any(k in sym_upper for k in ["HAL", "BEL", "MAZDOCK", "COCHINSHIP", "GRSE", "BDL"]) or \
        any(k in c_lower for k in ["hindustan aeronautics", "bharat electronics", "mazagon", "cochin shipyard"]) or \
        "defense" in text or "defence" in text:
         return "DEFENCE"
 
-    # 9. Capital Goods, Engineering & EPC (L&T, BHEL, Siemens, ABB)
+    # 10. Capital Goods, Engineering & EPC (L&T, BHEL, Siemens, ABB)
     if any(k in sym_upper for k in ["LT", "BHEL", "SIEMENS", "ABB", "THERMAX", "CGPOWER", "RVNL"]) or \
        any(k in c_lower for k in ["larsen & toubro", "l&t", "bhel", "siemens"]) or \
        any(k in text for k in ["capital goods", "machinery", "engineering", "epc", "heavy equipment"]):
         return "CAPITAL_GOODS"
 
-    # 10. Metals & Mining (Tata Steel, JSW Steel, Hindalco, Vedanta, NMDC, SAIL)
+    # 11. Metals & Mining (Tata Steel, JSW Steel, Hindalco, Vedanta, NMDC, SAIL)
     if any(k in sym_upper for k in ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "NMDC", "SAIL", "COALINDIA", "JINDALSTEL"]) or \
        any(k in c_lower for k in ["tata steel", "jsw steel", "hindalco", "vedanta", "nmdc", "sail"]) or \
        any(k in text for k in ["metal", "steel", "aluminium", "copper", "iron ore", "mining"]):
         return "METALS"
 
-    # 11. Real Estate & Realty (DLF, Godrej Prop, Oberoi, Macrotech)
+    # 12. Real Estate & Realty (DLF, Godrej Prop, Oberoi, Macrotech)
     if any(k in sym_upper for k in ["DLF", "GODREJPROP", "OBEROIRLTY", "LODHA", "MACROTECH", "NBCC", "PRESTIGE"]) or \
        any(k in text for k in ["real estate", "realty", "property", "residential construction"]):
         return "REAL_ESTATE"
 
-    # 12. FMCG & Consumer Goods (HUL, ITC, Nestle, Britannia, Dabur, Marico)
+    # 13. FMCG & Consumer Goods (HUL, ITC, Nestle, Britannia, Dabur, Marico)
     if any(k in sym_upper for k in ["HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA", "DABUR", "MARICO", "COLPAL", "TATACONSUM"]) or \
        any(k in c_lower for k in ["hindustan unilever", "itc limited", "nestle", "britannia"]) or \
        any(k in text for k in ["fmcg", "consumer goods", "packaged food", "personal care"]):
         return "FMCG"
 
-    # 13. Retail & E-Commerce (Avenue Supermarts, Trent, Nykaa, Zomato)
+    # 14. Retail & E-Commerce (Avenue Supermarts, Trent, Nykaa, Zomato)
     if any(k in sym_upper for k in ["DMART", "TRENT", "NYKAA", "ZOMATO", "SWIGGY"]) or \
        any(k in text for k in ["retail", "supermarket", "e-commerce", "hypermarket"]):
         return "RETAIL"
 
-    # 14. Utilities & Power Generation (NTPC, NHPC, Power Grid, SJVN, Tata Power)
+    # 15. Utilities & Power Generation (NTPC, NHPC, Power Grid, SJVN, Tata Power)
     if any(k in sym_upper for k in ["NTPC", "NHPC", "POWERGRID", "SJVN", "TATAPOWER", "TORNTPOWER", "CESC"]) or \
        any(k in text for k in ["utility", "electric utility", "power generation", "power transmission"]):
         return "UTILITIES"
 
-    # 15. Telecom
+    # 16. Telecom
     if any(k in sym_upper for k in ["BHARTIARTL", "IDEA", "INDUSTOWERS"]) or "telecom" in text:
         return "TELECOM"
-
-    # 16. Energy, Oil & Gas (Reliance, ONGC, IOC, BPCL, HPCL, GAIL)
-    if any(k in sym_upper for k in ["RELIANCE", "ONGC", "IOC", "BPCL", "HPCL", "GAIL", "OIL"]) or \
-       any(k in text for k in ["oil & gas", "petroleum", "refinery", "gas distribution"]):
-        return "ENERGY"
 
     return "DEFAULT"
 
@@ -241,7 +293,7 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
 def get_sector_template(company_type: str) -> dict:
     """
     Return the sector template dictionary for a canonical company_type string code.
-    Accepts ONLY a canonical string (e.g. 'BANK', 'NBFC', 'WIND_EQUIPMENT', etc.).
+    Accepts ONLY a canonical string (e.g. 'BANK', 'NBFC', 'WIND_EQUIPMENT', 'OIL_GAS_E&P', etc.).
     """
     c_type = str(company_type or "").upper().strip()
     mapping = {
@@ -252,6 +304,10 @@ def get_sector_template(company_type: str) -> dict:
         "IT": SECTOR_METRICS["it"],
         "PHARMA": SECTOR_METRICS["pharma"],
         "WIND_EQUIPMENT": SECTOR_METRICS["wind_equipment"],
+        "OIL_GAS_E&P": SECTOR_METRICS["oil_gas_ep"],
+        "OIL_GAS_INTEGRATED": SECTOR_METRICS["oil_gas_ep"],
+        "REFINING_MARKETING": SECTOR_METRICS["refining_marketing"],
+        "GAS_TRANSMISSION": SECTOR_METRICS["gas_transmission"],
         "CAPITAL_GOODS": SECTOR_METRICS["capital_goods"],
         "DEFENCE": SECTOR_METRICS["capital_goods"],
         "METALS": SECTOR_METRICS["metals"],
@@ -259,8 +315,7 @@ def get_sector_template(company_type: str) -> dict:
         "FMCG": SECTOR_METRICS["fmcg"],
         "UTILITIES": SECTOR_METRICS["utilities"],
         "RETAIL": SECTOR_METRICS["fmcg"],
-        "TELECOM": SECTOR_METRICS["it"],
-        "ENERGY": SECTOR_METRICS["metals"]
+        "TELECOM": SECTOR_METRICS["it"]
     }
     return mapping.get(c_type, SECTOR_METRICS["capital_goods"])
 

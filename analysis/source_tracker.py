@@ -11,6 +11,17 @@ class SourceTracker:
                   claim_type: str = "FACT",
                   module: str = "general") -> Dict[str, Any]:
         """Register a fact with its source, verification status, and claim type."""
+        s_lower = str(source or "").lower()
+        st_lower = str(source_type or "").lower()
+        
+        # Enforce source hierarchy: Yahoo / yfinance / Aggregators are strictly secondary market data
+        if any(k in s_lower or k in st_lower for k in ["yahoo", "yfinance", "aggregator", "secondary"]):
+            source_type = "SECONDARY_MARKET_DATA"
+            if verification_status == "PRIMARY_VERIFIED":
+                verification_status = "DERIVED_FROM_SECONDARY"
+            elif verification_status == "UNVERIFIED":
+                verification_status = "SECONDARY_ONLY"
+
         record = {
             'claim_text': claim,
             'value': value,

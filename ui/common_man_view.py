@@ -179,10 +179,15 @@ def render_common_man_view(dossier: dict):
         roe_str = computed.get("profitability", {}).get("roe", {}).get("formatted_string", "N/A") if isinstance(computed.get("profitability"), dict) else "N/A"
         pe_str = computed.get("valuation", {}).get("pe_ratio", {}).get("formatted_string", "N/A") if isinstance(computed.get("valuation"), dict) else "N/A"
         de_str = computed.get("debt_metrics", {}).get("debt_to_equity", {}).get("formatted_string", "N/A") if isinstance(computed.get("debt_metrics"), dict) else "N/A"
-        st.markdown(f"- **ROE (Return on Equity)**: `{roe_str}`")
-        st.markdown(f"- **P/E Ratio (Price to Earnings)**: `{pe_str}`")
-        st.markdown(f"- **Debt to Equity Ratio**: `{de_str}`")
-        st.markdown(f"- **Dividend Yield**: `{div_yield*100:.2f}%`")
+        st.markdown("- **Profitability Efficiency**: The company is generating a reasonable profit relative to shareholder money.")
+        st.markdown("- **Valuation Multiple**: The share trades at a multiple of recent profits, which should be evaluated alongside commodity price realizations and earnings stability.")
+        st.markdown("- **Balance Sheet Leverage**: Borrowing and debt are monitored to ensure financial safety.")
+        
+        with st.expander("📊 View Underlying Financial Ratios & Numbers"):
+            st.markdown(f"- **Return on Equity (ROE)**: `{roe_str}`")
+            st.markdown(f"- **Price to Earnings (P/E)**: `{pe_str}`")
+            st.markdown(f"- **Debt to Equity Ratio**: `{de_str}`")
+            st.markdown(f"- **Dividend Yield**: `{div_yield*100:.2f}%`")
 
     # 5. Business & Operations Overview
     render_section_header("2. What Does The Company Actually Do?", "🏢", "Simple explanation of the core business model")

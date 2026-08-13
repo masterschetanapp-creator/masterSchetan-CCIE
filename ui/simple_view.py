@@ -115,23 +115,27 @@ def _generate_dynamic_shareholding(info: dict, symbol: str, company_name: str, s
 
     if p_val is None or i_val is None:
         rows = [
-            {"Holder Category": "Promoter / Controlling Group", "Holding %": f"{p_val:.2f}%" if p_val is not None else "Not verified", "AI Observation": "Exchange filing required"},
-            {"Holder Category": "Institutional Investors", "Holding %": f"{i_val:.2f}%" if i_val is not None else "Not verified", "AI Observation": "Exchange filing required"},
+            {"Holder Category": "Promoter / Promoter Group", "Holding %": f"{p_val:.2f}%" if p_val is not None else "Not verified", "AI Observation": "Official exchange filing required"},
+            {"Holder Category": "Government (Non-Promoter)", "Holding %": "Not verified", "AI Observation": "Government non-promoter holdings classified separately from promoter"},
+            {"Holder Category": "Foreign Institutional Investors (FII)", "Holding %": "Not verified", "AI Observation": "FII quarterly filing required"},
+            {"Holder Category": "Domestic Institutions (Mutual Funds / DII)", "Holding %": f"{i_val:.2f}%" if i_val is not None else "Not verified", "AI Observation": "DII quarterly filing required"},
+            {"Holder Category": "Retail & Public Shareholders", "Holding %": "Not verified", "AI Observation": "Public float disclosure required"},
             {"Holder Category": "Promoter Pledge", "Holding %": "Not verified", "AI Observation": "Pledge disclosure required"}
         ]
-        interpretation = "AI INTERPRETATION: Shareholding pattern details could not be reliably verified from available disclosures. Refer to official BSE/NSE quarterly ownership filings."
+        interpretation = "AI INTERPRETATION: Shareholding pattern details could not be fully verified from available disclosures. Refer to official BSE/NSE quarterly ownership filings."
         return rows, interpretation
 
     public_val = max(0.0, 100.0 - (p_val + i_val))
-    p_obs = "Institutional / Professional Management Float" if p_val < 5.0 else ("Controlling State / Founder Stake" if p_val > 50.0 else "Core Promoter Equity")
+    p_obs = "Institutional / Professional Management Float" if p_val < 5.0 else ("Official Government / Founder Promoter Group" if p_val > 50.0 else "Core Promoter Equity")
 
     rows = [
-        {"Holder Category": "Promoter / Controlling Group", "Holding %": f"{p_val:.2f}%", "AI Observation": p_obs},
-        {"Holder Category": "Institutional Holdings", "Holding %": f"{i_val:.2f}%", "AI Observation": "Combined FII & DII institutional holdings"},
-        {"Holder Category": "Public & Retail Shareholders", "Holding %": f"{public_val:.2f}%", "AI Observation": "Public equity float"},
+        {"Holder Category": "Promoter / Promoter Group", "Holding %": f"{p_val:.2f}%", "AI Observation": p_obs},
+        {"Holder Category": "Government (Non-Promoter)", "Holding %": "Separate (Not Promoters)", "AI Observation": "Government non-promoter holdings (e.g. LIC, public financial bodies) classified separately from official promoter group"},
+        {"Holder Category": "Institutional Holdings (FII / DII)", "Holding %": f"{i_val:.2f}%", "AI Observation": "Combined institutional equity stake"},
+        {"Holder Category": "Retail & Public Shareholders", "Holding %": f"{public_val:.2f}%", "AI Observation": "Public equity float"},
         {"Holder Category": "Promoter Pledge", "Holding %": "Not verified", "AI Observation": "Check BSE/NSE quarterly pledge filings"}
     ]
-    interpretation = f"AI INTERPRETATION: Promoter equity stands at {p_val:.2f}%, with institutional holdings at {i_val:.2f}%. Public float is {public_val:.2f}%."
+    interpretation = f"AI INTERPRETATION: Official Promoter equity stands at {p_val:.2f}%, with institutional holdings at {i_val:.2f}%. Public float is {public_val:.2f}%. Government non-promoter stakes are tracked separately from promoter group."
     return rows, interpretation
 
 
@@ -174,12 +178,15 @@ def render_simple_view(dossier: dict):
     # Report Map
     render_report_map()
 
+    comp_badge = dossier.get("completeness", {}).get("badge_text", "Complete 26-Section Research Report")
+
     # Section 1: Header
     st.markdown(f"""
     <div style="background: #ffffff; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
         <div style="color: #2563eb; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase;">SIMPLE INVESTOR VIEW</div>
         <h1 style="color: #0f172a; margin: 0.25rem 0 0.5rem 0; font-size: 2.2rem;">{company_name}</h1>
         <div style="color: #475569; font-size: 1rem; font-weight: 600;">NSE: {symbol} · BSE: {info.get('bse_code', 'Listed')}</div>
+        <div style="color: #059669; font-weight: 600; font-size: 0.95rem; margin-top: 0.35rem;">📋 {comp_badge}</div>
         <div style="color: #64748b; font-size: 0.9rem; margin-top: 0.25rem;">A beginner-friendly research report - refreshed {dossier.get('generated_at', '12 August 2026')}</div>
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem 1.1rem; margin-top: 1rem;">
             <strong style="color: #0f172a;">Who this report is for:</strong>
@@ -268,6 +275,18 @@ def render_simple_view(dossier: dict):
     sh_rows, sh_interp = _generate_dynamic_shareholding(info, symbol, company_name, sector_name, "N/A", "N/A", ctso)
     st.markdown(_render_html_table(["Holder Category", "Holding %", "AI Observation"], sh_rows), unsafe_allow_html=True)
     st.markdown(f"*{sh_interp}*")
+
+    # Group & Subsidiary Structure Section
+    group_info = decision.get("group_structure", {})
+    if group_info:
+        render_section_header("22. Group & Subsidiary Structure", "🏢", "Conglomerate & Holding Structure")
+        g_rows = [
+            {"Structure Component": "Group Classification", "Details": group_info.get("structure_type", "Conglomerate")},
+            {"Structure Component": "Parent Operations", "Details": group_info.get("parent_core", "")},
+            {"Structure Component": "Major Operating Subsidiaries", "Details": ", ".join(group_info.get("major_subsidiaries", []))},
+            {"Structure Component": "Consolidated Impact Note", "Details": group_info.get("note", "")}
+        ]
+        st.markdown(_render_html_table(["Structure Component", "Details"], g_rows), unsafe_allow_html=True)
 
     # Section 14: Tip Check & Section 15: Bottom Line
     render_section_header("14. 7-Point Tip Check", "✅", "Empirical decision support check")

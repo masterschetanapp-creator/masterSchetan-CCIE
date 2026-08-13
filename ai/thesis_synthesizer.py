@@ -276,6 +276,11 @@ Generate the Central Thesis State Object (CTSO) as JSON."""
             if all(k in ctso for k in required):
                 ctso['company_name'] = company_name
                 ctso['sector'] = sector
+                # Sanitize recommendation terminology
+                gt = str(ctso.get('golden_thread', ''))
+                for bad_kw in ["BUY", "SELL", "STRONG BUY", "ATTRACTIVE INVESTMENT OPPORTUNITY", "TARGET PRICE"]:
+                    gt = gt.replace(bad_kw, "decision-support observation")
+                ctso['golden_thread'] = gt
                 logger.info(f"CTSO generated for {company_name}: {ctso.get('archetype')}")
                 return ctso
     except Exception as e:

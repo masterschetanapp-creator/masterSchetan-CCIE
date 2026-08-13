@@ -331,6 +331,41 @@ def calculate_cash_flow_quality(cashflow: Dict[str, Any], income_stmt: Dict[str,
     return result
 
 
+def aggregate_dividends_by_financial_year(dividend_history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Aggregates individual dividend events by Financial Year (FY26 = interim_1 + interim_2 + final).
+    Prevents impossible outputs (e.g. 6/5 years paid).
+    """
+    if not isinstance(dividend_history, list):
+        return {"fy_dividends": {}, "years_paid_str": "0/5 years paid", "num_years_paid": 0, "regularity": "NONE"}
+
+    fy_totals = {}
+    for d in dividend_history:
+        if not isinstance(d, dict):
+            continue
+        dt_str = str(d.get("Date") or d.get("date") or "")
+        amt = d.get("Dividends") or d.get("amount") or d.get("value") or 0.0
+        if len(dt_str) >= 4 and dt_str[:4].isdigit():
+            yr = int(dt_str[:4])
+            month = int(dt_str[5:7]) if len(dt_str) >= 7 and dt_str[5:7].isdigit() else 6
+            fy = f"FY{yr}" if month >= 4 else f"FY{yr-1}"
+            fy_totals[fy] = round(fy_totals.get(fy, 0.0) + float(amt), 2)
+
+    import datetime
+    cur_year = datetime.date.today().year
+    cur_fy_int = cur_year if datetime.date.today().month >= 4 else cur_year - 1
+    last_5_fys = [f"FY{cur_fy_int - i}" for i in range(5)]
+    paid_fys = [fy for fy in last_5_fys if fy_totals.get(fy, 0) > 0]
+    num_paid = len(paid_fys)
+
+    return {
+        "fy_dividends": fy_totals,
+        "years_paid_str": f"{num_paid}/5 years paid",
+        "num_years_paid": num_paid,
+        "regularity": "REGULAR" if num_paid >= 4 else ("IRREGULAR" if num_paid >= 1 else "NONE")
+    }
+
+
 from data.sector_templates import classify_company_type
 
 
@@ -363,5 +398,23 @@ def calculate_all_metrics(financial_data: Dict[str, Any]) -> Dict[str, Any]:
     price = info.get('currentPrice') or info.get('regularMarketPrice') or 0.0
     metrics['valuation'] = calculate_valuation(price, info)
     metrics['cash_flow_quality'] = calculate_cash_flow_quality(curr_cashflow, curr_income)
+
+    # Track reported vs calculated ratio metadata
+    rep_de = info.get('debtToEquity')
+    calc_de = metrics['debt_metrics'].get('debt_to_equity', {}).get('value') if isinstance(metrics.get('debt_metrics'), dict) else None
+    
+    metrics['ratio_comparisons'] = {
+        "debt_to_equity": {
+            "reported": f"{rep_de/100:.2f}x" if rep_de is not None and isinstance(rep_de, (int, float)) else "N/A",
+            "calculated": f"{calc_de:.2f}x" if calc_de is not None else "N/A",
+            "differs": bool(rep_de is not None and calc_de is not None and abs((rep_de/100) - calc_de) > 0.2)
+        }
+    }
+
+    # Aggregate dividends by FY
+    raw_divs = financial_data.get('dividends', [])
+    if isinstance(raw_divs, dict) and "dividends" in raw_divs:
+        raw_divs = raw_divs["dividends"]
+    metrics['fy_dividends'] = aggregate_dividends_by_financial_year(raw_divs if isinstance(raw_divs, list) else [])
 
     return metrics

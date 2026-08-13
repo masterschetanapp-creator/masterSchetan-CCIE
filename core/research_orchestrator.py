@@ -235,6 +235,20 @@ def build_dossier(symbol: str, company_name: str, progress_callback=None) -> dic
         decision_support = {}
         traceback.print_exc()
 
+    # ── Step 10.2: Report Consistency & Completeness Validation ──────────────
+    try:
+        from analysis.report_consistency_validator import ReportConsistencyValidator
+        from analysis.report_completeness_validator import ReportCompletenessValidator
+        
+        c_val = ReportConsistencyValidator().validate_dossier_consistency(dossier)
+        dossier["consistency_check"] = c_val
+        
+        comp_val = ReportCompletenessValidator().validate_completeness(dossier)
+        dossier["completeness"] = comp_val
+        dossier["modules"]["completeness"] = comp_val
+    except Exception as e:
+        dossier["errors"].append(f"Validation error: {str(e)}")
+
     # ── Step 10.5: Generate Central Thesis (CTSO) ─────────────
     update_progress("Synthesizing central investment thesis...", 62)
     try:
