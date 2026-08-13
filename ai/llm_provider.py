@@ -79,7 +79,7 @@ class MultiModelLLMClient:
             except Exception as e:
                 logger.error(f"Gemini configuration error: {e}")
 
-        self.gemini_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite']
+        self.gemini_models = ['gemini-1.5-flash', 'models/gemini-1.5-flash', 'gemini-1.5-pro', 'models/gemini-1.5-pro', 'gemini-2.0-flash', 'models/gemini-2.0-flash']
         self.groq_models = ['llama-3.3-70b-versatile', 'gemma2-9b-it']
         self.openrouter_models = [
             'openrouter/auto',
