@@ -9,7 +9,12 @@ class SourceTracker:
                   source_date: Optional[str] = None, confidence: int = 0,
                   verification_status: str = "UNVERIFIED",
                   claim_type: str = "FACT",
-                  module: str = "general") -> Dict[str, Any]:
+                  module: str = "general",
+                  source_url: Optional[str] = None,
+                  source_document_id: Optional[str] = None,
+                  page: Optional[int] = None,
+                  evidence_snippet: Optional[str] = None,
+                  extraction_method: Optional[str] = None) -> Dict[str, Any]:
         """Register a fact with its source, verification status, and claim type."""
         s_lower = str(source or "").lower()
         st_lower = str(source_type or "").lower()
@@ -17,6 +22,7 @@ class SourceTracker:
         # Enforce source hierarchy: Yahoo / yfinance / Aggregators are strictly secondary market data
         if any(k in s_lower or k in st_lower for k in ["yahoo", "yfinance", "aggregator", "secondary"]):
             source_type = "SECONDARY_MARKET_DATA"
+            confidence = min(confidence, 70)
             if verification_status == "PRIMARY_VERIFIED":
                 verification_status = "DERIVED_FROM_SECONDARY"
             elif verification_status == "UNVERIFIED":
@@ -28,6 +34,11 @@ class SourceTracker:
             'source': source,
             'source_type': source_type,
             'source_date': source_date,
+            'source_url': source_url,
+            'source_document_id': source_document_id,
+            'page': page,
+            'evidence_snippet': evidence_snippet,
+            'extraction_method': extraction_method,
             'confidence': confidence,
             'verification_status': verification_status,
             'claim_type': claim_type,
@@ -47,7 +58,7 @@ class SourceTracker:
             return {'average_confidence': 0, 'total_claims': 0, 'status': 'UNVERIFIED', 'confidence_label': 'UNVERIFIED'}
         
         total = len(self.claims)
-        primary_claims = sum(1 for c in self.claims if c.get('verification_status') in ('PRIMARY_VERIFIED', 'DERIVED_FROM_PRIMARY'))
+        primary_claims = sum(1 for c in self.claims if c.get('verification_status') in ('PRIMARY_VERIFIED', 'DERIVED_FROM_PRIMARY', 'PRIMARY_DOCUMENT_EXTRACTED'))
         secondary_claims = sum(1 for c in self.claims if c.get('verification_status') in ('SECONDARY_ONLY', 'DERIVED_FROM_SECONDARY', 'SINGLE_SECONDARY'))
         unverified_claims = total - (primary_claims + secondary_claims)
 
@@ -58,9 +69,9 @@ class SourceTracker:
         avg_confidence = sum(c.get('confidence', 0) for c in self.claims) / total
 
         if primary_pct >= 50:
-            status_label = "HIGH (Primary Exchange / Filing Verified)"
+            status_label = "HIGH (Primary Document Coverage)"
         elif (primary_claims + secondary_claims) / total >= 0.7:
-            status_label = "MEDIUM (Secondary Aggregator Verified)"
+            status_label = "MEDIUM (Secondary Data Coverage)"
         else:
             status_label = "LOW (Unverified / Limited Coverage)"
 

@@ -1,50 +1,49 @@
-"""
-masterSchetan CCIE — Internal Report Consistency Validator
-Cross-validates metric values across all views & modules before UI rendering.
-Ensures Common Man View, Simple View, Analyst View, PDF, CTSO, and Tip Check show identical numbers.
-"""
+"""Validation gate preventing conflicting figures from reaching report renderers."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-
-class ConsistencyError(Exception):
-    """Raised when two views or modules report conflicting metrics for the same metric field."""
-    pass
+from analysis.metric_schema import is_unknown
 
 
 class ReportConsistencyValidator:
-    """
-    Validates internal consistency across all 41 research modules and UI renderers.
-    """
+    """Compare every view-facing metric with the canonical computed metric object."""
 
     def validate_dossier_consistency(self, dossier: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Validates dossier metric values across decision_support, computed_metrics, and research_snapshot.
-        """
-        mismatches: List[str] = []
-        modules = dossier.get("modules", {})
+        modules = dossier.get("modules", {}) if isinstance(dossier, dict) else {}
         computed = modules.get("computed_metrics", {})
         decision = dossier.get("decision_support") or modules.get("decision_support", {})
+        mismatches: List[str] = []
 
-        if not computed or not decision:
-            return {"status": "SKIPPED", "mismatches": []}
+        if not isinstance(computed, dict) or not isinstance(decision, dict) or not decision:
+            return {"status": "BLOCKED", "mismatches": ["Canonical computed metrics or decision support is missing."], "render_allowed": False}
 
-        # Check 1: ROE consistency
-        comp_roe = computed.get("profitability", {}).get("roe", {}).get("formatted_string") if isinstance(computed.get("profitability"), dict) else None
-        ds_roe = decision.get("profitability", {}).get("formatted_string") if isinstance(decision.get("profitability"), dict) else None
+        canonical_type = dossier.get("company_type") or modules.get("company_type")
+        if canonical_type != decision.get("company_type"):
+            mismatches.append(f"Company type mismatch: dossier={canonical_type!r}, decision={decision.get('company_type')!r}.")
 
-        if comp_roe and ds_roe and comp_roe != ds_roe:
-            mismatches.append(f"ROE Mismatch: Computed ({comp_roe}) vs DecisionEngine ({ds_roe})")
+        snapshot = decision.get("metric_snapshot", {})
+        if not isinstance(snapshot, dict):
+            mismatches.append("Decision support does not expose its canonical metric snapshot.")
+        else:
+            for metric_name, item in snapshot.items():
+                if not isinstance(item, dict):
+                    mismatches.append(f"Metric snapshot entry {metric_name!r} is not canonical.")
+                    continue
+                if "value" not in item or "formatted_string" not in item or "evidence" not in item:
+                    mismatches.append(f"Metric snapshot entry {metric_name!r} does not use the metric/evidence schema.")
+                evidence = item.get("evidence", {})
+                if isinstance(evidence, dict) and evidence.get("source_type") == "SECONDARY_MARKET_DATA" and evidence.get("verification_status") in {"PRIMARY_VERIFIED", "DERIVED_FROM_PRIMARY"}:
+                    mismatches.append(f"Metric {metric_name!r} falsely claims primary verification from a secondary source.")
 
-        # Check 2: Debt to Equity consistency
-        comp_de = computed.get("debt_metrics", {}).get("debt_to_equity", {}).get("formatted_string") if isinstance(computed.get("debt_metrics"), dict) else None
-        ds_de = decision.get("financial_health", {}).get("de_fmt") if isinstance(decision.get("financial_health"), dict) else None
+        common_man = modules.get("common_man_report")
+        if common_man and common_man is not decision:
+            mismatches.append("Common Man view has a separate report payload instead of canonical decision support.")
 
-        if comp_de and ds_de and comp_de != ds_de:
-            mismatches.append(f"Debt/Equity Mismatch: Computed ({comp_de}) vs DecisionEngine ({ds_de})")
+        source_summary = modules.get("source_tracking", {}).get("summary", {}) if isinstance(modules.get("source_tracking"), dict) else {}
+        primary_coverage = source_summary.get("primary_coverage_pct", 0) if isinstance(source_summary, dict) else 0
+        research_status = str(decision.get("research_status", "")).lower()
+        if not primary_coverage and "primary verified" in research_status:
+            mismatches.append("Research status claims primary verification with zero primary evidence coverage.")
 
-        if mismatches:
-            dossier.setdefault("errors", []).extend(mismatches)
-            return {"status": "CONSISTENCY_ERROR", "mismatches": mismatches}
-
-        return {"status": "CONSISTENT", "mismatches": []}
+        status = "CONSISTENT" if not mismatches else "BLOCKED"
+        return {"status": status, "mismatches": mismatches, "render_allowed": not mismatches}

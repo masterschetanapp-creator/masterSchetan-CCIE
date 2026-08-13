@@ -32,6 +32,8 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "search_triggered" not in st.session_state:
     st.session_state.search_triggered = False
+if "force_research" not in st.session_state:
+    st.session_state.force_research = False
 
 
 def main():
@@ -42,8 +44,9 @@ def main():
     stock_info = _render_search()
     
     if stock_info:
-        if (st.session_state.dossier is None or 
-            st.session_state.get("current_symbol") != stock_info["symbol"]):
+        if (st.session_state.dossier is None or
+            st.session_state.get("current_symbol") != stock_info["symbol"] or
+            st.session_state.pop("force_research", False)):
             _run_research(stock_info)
         
         if st.session_state.dossier:
@@ -105,6 +108,68 @@ def _render_sidebar():
                     st.session_state["DEEPSEEK_API_KEY"] = deepseek_k
                 st.success("API keys updated successfully!")
                 st.rerun()
+
+        st.markdown("---")
+        with st.expander("Primary Filing Evidence", expanded=False):
+            st.file_uploader(
+                "Filing text or HTML",
+                type=["txt", "html", "htm"],
+                key="primary_evidence_document",
+            )
+            st.selectbox(
+                "Document category",
+                options=["QUARTERLY_RESULTS", "ANNUAL_REPORT", "INVESTOR_PRESENTATION", "EARNINGS_TRANSCRIPT"],
+                key="primary_evidence_source_type",
+            )
+            st.text_input("Public document link", key="primary_evidence_source_url")
+            st.text_input("Exchange or company filing ID", key="primary_evidence_document_id")
+            st.text_input("BSE scrip code (optional)", key="primary_evidence_bse_scrip_code")
+            st.text_input("Document title", key="primary_evidence_document_title")
+            st.text_input("Reporting period end (YYYY-MM-DD)", key="primary_evidence_period_end")
+            st.selectbox(
+                "Statement scope",
+                options=["UNKNOWN", "STANDALONE", "CONSOLIDATED"],
+                key="primary_evidence_statement_scope",
+            )
+            st.text_input("Published date (YYYY-MM-DD)", key="primary_evidence_published_date")
+            st.text_input("Page number (optional)", key="primary_evidence_page")
+            if st.session_state.get("primary_evidence_document"):
+                st.caption("The document is used only when its link and filing ID are provided.")
+
+
+def _uploaded_primary_evidence():
+    """Convert the optional sidebar upload into a validated primary-evidence pack."""
+    uploaded_file = st.session_state.get("primary_evidence_document")
+    bse_scrip_code = str(st.session_state.get("primary_evidence_bse_scrip_code", "")).strip()
+    if uploaded_file is None:
+        return {"bse_scrip_code": bse_scrip_code} if bse_scrip_code else None
+
+    try:
+        content = uploaded_file.getvalue().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+    from data.primary_evidence_collector import build_uploaded_evidence_pack
+
+    page_text = str(st.session_state.get("primary_evidence_page", "")).strip()
+    page = int(page_text) if page_text.isdigit() and int(page_text) > 0 else None
+    filename = str(getattr(uploaded_file, "name", "")).lower()
+    pack = build_uploaded_evidence_pack(
+        content,
+        source_type=st.session_state.get("primary_evidence_source_type", ""),
+        source_url=st.session_state.get("primary_evidence_source_url", ""),
+        document_id=st.session_state.get("primary_evidence_document_id", ""),
+        document_title=st.session_state.get("primary_evidence_document_title", ""),
+        period_end=st.session_state.get("primary_evidence_period_end", ""),
+        reporting_period="latest_period",
+        statement_scope=st.session_state.get("primary_evidence_statement_scope", "UNKNOWN"),
+        published_date=st.session_state.get("primary_evidence_published_date", ""),
+        page=page,
+        content_format="html" if filename.endswith((".html", ".htm")) else "text",
+    )
+    if bse_scrip_code:
+        pack["bse_scrip_code"] = bse_scrip_code
+    return pack if pack.get("documents") or bse_scrip_code else None
 
 
 def _render_header():
@@ -171,13 +236,14 @@ def _render_search():
                 """, unsafe_allow_html=True)
 
             if stock_to_run:
-                btn_clicked = st.button("🔍 Generate Complete AI Equity Research Report", type="primary", use_container_width=True, key="btn_run_research")
+                btn_clicked = st.button("Generate Equity Research Dossier", type="primary", use_container_width=True, key="btn_run_research")
                 query_changed = st.session_state.get("last_auto_query") != query.strip()
 
                 if btn_clicked or query_changed:
                     st.session_state.last_auto_query = query.strip()
                     st.session_state.selected_stock = stock_to_run
                     st.session_state.search_triggered = True
+                    st.session_state.force_research = btn_clicked
                     st.rerun()
 
                 if hasattr(st.session_state, 'selected_stock') and st.session_state.search_triggered:
@@ -215,8 +281,15 @@ def _run_research(stock_info: dict):
         from core.research_orchestrator import build_dossier
 
         try:
-            dossier = build_dossier(symbol, name, progress_callback=update_progress)
+            dossier = build_dossier(
+                symbol,
+                name,
+                progress_callback=update_progress,
+                primary_evidence=_uploaded_primary_evidence(),
+            )
             st.session_state.dossier = dossier
+            if dossier.get("render_blocked"):
+                st.warning("Research data was collected, but report rendering is blocked by reliability validation.")
             st.toast("✅ Master Research Report Generated!", icon="🎉")
         except Exception as e:
             st.error(f"❌ Research failed: {str(e)}")
@@ -232,7 +305,7 @@ def _render_welcome_screen():
     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; border-radius: 12px; padding: 2rem; margin: 2rem 0; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
         <h3 style="color: #0f172a; margin-top: 0; font-size: 1.4rem;">📊 Instant Multi-Model Equity Intelligence Engine</h3>
         <p style="color: #475569; font-size: 1rem; max-width: 700px; margin: 0.5rem auto 0 auto; line-height: 1.6;">
-            Search any BSE or NSE listed stock in the search bar above to generate a complete 26-section AI research dossier, including 15-point forensic red flags, central investment thesis, and audited multi-year financials.
+            Search any BSE or NSE listed stock to generate an evidence-gated research dossier. Source type, available evidence, and missing disclosures are shown explicitly.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -242,6 +315,12 @@ def _render_dossier():
     """Render the full company dossier."""
     dossier = st.session_state.dossier
     if not dossier:
+        return
+
+    if dossier.get("render_blocked"):
+        st.error("Report rendering is blocked because the consistency validator found missing or conflicting evidence.")
+        for issue in dossier.get("consistency_check", {}).get("mismatches", []):
+            st.write(f"- {issue}")
         return
 
     from ui.components import render_stock_header, render_view_toggle, render_disclaimer
@@ -269,7 +348,8 @@ def _render_dossier():
     # ── Stock Header ──────────────────────────────────────
     render_stock_header(
         dossier.get("modules", {}).get("company_snapshot", {}),
-        dossier.get("modules", {}).get("price_data", {})
+        dossier.get("modules", {}).get("price_data", {}),
+        dossier.get("modules", {}).get("source_tracking", {}).get("summary", {})
     )
 
     # ── 3 Research Perspective Tabs ────────────────────────
@@ -299,7 +379,7 @@ def _render_footer():
     """Render the app footer."""
     st.markdown(f"""
     <div style="text-align: center; color: #64748b; font-size: 0.85rem; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0;">
-        <p>{APP_NAME} v{APP_VERSION} · Zero Cost · Fact-Checked Equity Intelligence</p>
+        <p>{APP_NAME} v{APP_VERSION} · Zero Cost · Evidence-Gated Equity Intelligence</p>
     </div>
     """, unsafe_allow_html=True)
 

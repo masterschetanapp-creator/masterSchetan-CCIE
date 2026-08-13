@@ -1,180 +1,98 @@
-"""
-masterSchetan CCIE — UI Components
-Matches exact components from PNB_Complete_AI_Equity_Research_Report.pdf
-"""
+"""Shared Streamlit presentation components."""
 
-import streamlit as st
+from html import escape
 
-def render_stock_header(profile: dict, price_data: dict):
-    """Render PDF Report Header Banner (Page 1 style)."""
+try:
+    import streamlit as st
+except ImportError:
+    st = None
+
+
+def render_stock_header(profile: dict, price_data: dict, source_summary: dict = None):
+    """Render the dossier header without inventing a price or confidence level."""
     company_name = profile.get("name", "Unknown Company")
-    symbol = profile.get("symbol", "").replace(".NS", "").replace(".BO", "")
-    sector = profile.get("sector", "Public Sector Bank")
-    industry = profile.get("industry", "Financial Services")
-    market_cap = profile.get("market_cap_formatted", "N/A")
-    price = price_data.get("current_price", 0.0)
-    change = price_data.get("change_percent", 0.0)
-    
-    color_style = "color: #059669;" if change >= 0 else "color: #dc2626;"
-    sign = "+" if change >= 0 else ""
-
-    html = f"""
-    <div class="pdf-report-header">
-        <div class="pdf-header-top">
-            <span>AI EQUITY RESEARCH REPORT · {symbol}</span>
-            <span>Research/education only — Not investment advice</span>
-        </div>
-        <div class="pdf-header-title">{company_name}</div>
-        <div class="pdf-header-subtitle">Complete AI Equity Research Report</div>
-        <div style="margin: 0.5rem 0 1rem 0; font-size: 1.5rem; font-weight: 700; color: #0f172a;">
-            Current Price: ₹{price:,.2f} <span style="{color_style} font-size: 1.1rem; margin-left: 0.5rem;">({sign}{change:.2f}%)</span>
-        </div>
-        <div class="pdf-header-meta">
-            <span><strong>NSE:</strong> {symbol}</span>
-            <span>·</span>
-            <span><strong>Industry:</strong> {sector} ({industry})</span>
-            <span>·</span>
-            <span><strong>Market Cap:</strong> {market_cap}</span>
-            <span>·</span>
-            <span><strong>Confidence:</strong> <span class="badge badge-confirmed">High</span></span>
-            <span>·</span>
-            <span><strong>Mode:</strong> Simple + Analyst</span>
-        </div>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    symbol = str(profile.get("symbol", "UNKNOWN")).replace(".NS", "").replace(".BO", "")
+    sector = profile.get("sector", "UNKNOWN")
+    industry = profile.get("industry", "UNKNOWN")
+    market_cap = profile.get("market_cap_formatted", "UNKNOWN")
+    price = price_data.get("current_price") if isinstance(price_data, dict) else None
+    change = price_data.get("change_percent") if isinstance(price_data, dict) else None
+    price_display = f"INR {price:,.2f}" if isinstance(price, (int, float)) else "UNKNOWN"
+    change_display = f"{change:+.2f}%" if isinstance(change, (int, float)) else "UNKNOWN"
+    change_color = "#059669" if isinstance(change, (int, float)) and change >= 0 else "#dc2626"
+    evidence_status = (source_summary or {}).get("status", "UNVERIFIED")
+    st.markdown(
+        f"<div class='pdf-report-header'><div class='pdf-header-top'><span>AI EQUITY RESEARCH REPORT | {escape(symbol)}</span>"
+        f"<span>Research and education only. Not investment advice.</span></div>"
+        f"<div class='pdf-header-title'>{escape(str(company_name))}</div><div class='pdf-header-subtitle'>Evidence-gated equity research</div>"
+        f"<div style='margin: 0.5rem 0 1rem 0; font-size: 1.5rem; font-weight: 700; color: #0f172a;'>Current Price: {price_display} "
+        f"<span style='color: {change_color}; font-size: 1.1rem; margin-left: 0.5rem;'>({change_display})</span></div>"
+        f"<div class='pdf-header-meta'><span><strong>NSE:</strong> {escape(symbol)}</span><span>|</span>"
+        f"<span><strong>Industry:</strong> {escape(str(sector))} ({escape(str(industry))})</span><span>|</span>"
+        f"<span><strong>Market Cap:</strong> {escape(str(market_cap))}</span><span>|</span>"
+        f"<span><strong>Evidence:</strong> <span class='badge badge-guidance'>{escape(str(evidence_status))}</span></span></div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_report_map():
-    """Render 10-point Report Map (Investor Priority Sequence)."""
-    html = """
+    st.markdown("""
     <div class="report-callout callout-warning" style="margin-bottom: 2rem;">
-        <span class="callout-label" style="color: #d97706;">📍 Report Map & Navigation (Investor Priority Order)</span>
+        <span class="callout-label" style="color: #d97706;">REPORT MAP</span>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
-            <div>1. Central Thesis & 30s Summary</div>
-            <div>2. Forensic Red Flag Audit (Risk Check)</div>
-            <div>3. Earnings Quality & Margins</div>
-            <div>4. Solvency & Balance Sheet</div>
-            <div>5. Future Growth & Guidance</div>
-            <div>6. Catalysts, SWOT & Peer Valuation</div>
-            <div>7. Business Model & Shareholding</div>
-            <div>8. Decision Support & Dividend History</div>
-            <div>9. Reach, News & Event Calendar</div>
-            <div>10. History, Evidence & Disclosures</div>
+            <div>1. 30-second summary</div><div>2. Risks and evidence gaps</div><div>3. Valuation context</div>
+            <div>4. Financial evidence</div><div>5. Sector-specific checks</div><div>6. Sources and provenance</div>
         </div>
     </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 
-def render_callout(text: str, label: str = "APP PHILOSOPHY", category: str = "info"):
-    """Render callout box (Page 2/3/4 callout style)."""
-    cat_class = f"callout-{category}" if category in ["warning", "danger", "success"] else ""
+def render_callout(text: str, label: str = "RESEARCH NOTE", category: str = "info"):
+    css_class = f"callout-{category}" if category in {"warning", "danger", "success"} else ""
     label_color = "#60a5fa" if category == "info" else "#fbbf24" if category == "warning" else "#f87171" if category == "danger" else "#34d399"
-
-    html = f"""
-    <div class="report-callout {cat_class}">
-        <span class="callout-label" style="color: {label_color};">{label}</span>
-        {text}
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    st.markdown(f"<div class='report-callout {css_class}'><span class='callout-label' style='color: {label_color};'>{escape(str(label))}</span>{escape(str(text))}</div>", unsafe_allow_html=True)
 
 
 def render_metric_card(label: str, value: str, status: str, explanation: str = None, icon: str = None):
-    """Single metric card with traffic-light border."""
-    status_class = f"metric-card-{status}"
-    icon_html = f"<span style='margin-right: 6px;'>{icon}</span>" if icon else ""
-    desc_html = f'<div class="metric-desc">{explanation}</div>' if explanation else ''
-
-    html = f"""
-    <div class="metric-card {status_class}">
-        <div class="metric-title">{icon_html}{label}</div>
-        <div class="metric-value">{value}</div>
-        {desc_html}
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    icon_html = f"<span style='margin-right: 6px;'>{escape(str(icon))}</span>" if icon else ""
+    description = f"<div class='metric-desc'>{escape(str(explanation))}</div>" if explanation else ""
+    st.markdown(f"<div class='metric-card metric-card-{escape(str(status))}'><div class='metric-title'>{icon_html}{escape(str(label))}</div><div class='metric-value'>{escape(str(value))}</div>{description}</div>", unsafe_allow_html=True)
 
 
 def render_metric_grid(metrics: list[dict], columns: int = 3):
-    """Grid of metric cards using st.columns."""
-    cols = st.columns(columns)
-    for i, metric in enumerate(metrics):
-        with cols[i % columns]:
-            render_metric_card(
-                label=metric.get("label", ""),
-                value=metric.get("value", ""),
-                status=metric.get("status", "neutral"),
-                explanation=metric.get("explanation", ""),
-                icon=metric.get("icon", "")
-            )
+    columns = max(1, columns)
+    rendered_columns = st.columns(columns)
+    for index, metric in enumerate(metrics):
+        with rendered_columns[index % columns]:
+            render_metric_card(metric.get("label", ""), metric.get("value", "UNKNOWN"), metric.get("status", "neutral"), metric.get("explanation", ""), metric.get("icon", ""))
 
 
 def render_section_header(title: str, icon: str, description: str = None):
-    """Section header matching PDF report headings."""
-    desc_html = f'<p style="color: #94a3b8; margin-top: -0.25rem; margin-bottom: 1rem; font-size: 0.9rem;">{description}</p>' if description else ''
-    html = f"""
-    <div style="margin-top: 2rem; margin-bottom: 0.75rem;">
-        <h2 style="display: flex; align-items: center; gap: 0.5rem; color: #f8fafc; margin: 0;">
-            <span>{icon}</span> {title}
-        </h2>
-        {desc_html}
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    description_html = f"<p style='color: #94a3b8; margin-top: 0; margin-bottom: 1rem; font-size: 0.9rem;'>{escape(str(description))}</p>" if description else ""
+    st.markdown(f"<div style='margin-top: 2rem; margin-bottom: 0.75rem;'><h2 style='display: flex; align-items: center; gap: 0.5rem; color: #f8fafc; margin: 0;'><span>{escape(str(icon))}</span>{escape(str(title))}</h2>{description_html}</div>", unsafe_allow_html=True)
 
 
 def render_fact_badge(status: str) -> str:
-    """Returns HTML badge for fact status: Confirmed, Guidance, Estimate, Danger."""
     status_lower = str(status).lower()
-    badge_class = "badge-confirmed" if "confirm" in status_lower else "badge-guidance" if "guidance" in status_lower or "plan" in status_lower else "badge-estimate" if "estimate" in status_lower else "badge-danger"
-    return f'<span class="badge {badge_class}">{status}</span>'
+    css_class = "badge-confirmed" if "confirm" in status_lower else "badge-guidance" if "guidance" in status_lower else "badge-estimate" if "estimate" in status_lower else "badge-danger"
+    return f"<span class='badge {css_class}'>{escape(str(status))}</span>"
 
 
 def render_investor_questions(questions: list[str]):
-    """'Questions an Investor Should Answer' section."""
-    st.markdown("""
-    <div class="report-callout" style="border-left-color: #60a5fa;">
-        <span class="callout-label" style="color: #60a5fa;">❓ 5 Decision Questions for Investors</span>
-    """, unsafe_allow_html=True)
-    for i, q in enumerate(questions, 1):
-        st.markdown(f"**{i}.** {q}")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<div class='report-callout' style='border-left-color: #60a5fa;'><span class='callout-label' style='color: #60a5fa;'>DECISION QUESTIONS</span></div>", unsafe_allow_html=True)
+    for index, question in enumerate(questions, 1):
+        st.markdown(f"{index}. {question}")
 
 
 def render_view_toggle() -> str:
-    """3-Way Toggle for Research Perspectives (Common Man View, Simple View 26 Sections, Analyst View)."""
-    st.markdown("""
-    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.75rem 1.25rem; margin: 1.25rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
-    """, unsafe_allow_html=True)
-    view = st.radio(
-        "Select Research Perspective:",
-        [
-            "🟢 Common Man View (PDF Report)",
-            "📊 Simple View (26 Research Sections)",
-            "📈 Analyst View (Detailed Ratios & Financials)"
-        ],
-        horizontal=True,
-        key="view_mode_radio"
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-    if "Common Man" in view:
-        return "CommonMan"
-    elif "26 Research Sections" in view:
-        return "Simple"
-    else:
-        return "Analyst"
+    view = st.radio("Select research perspective:", ["Common Man View", "Simple View", "Analyst View"], horizontal=True, key="view_mode_radio")
+    return "CommonMan" if "Common" in view else "Simple" if "Simple" in view else "Analyst"
 
 
 def render_disclaimer():
-    """Research Disclaimer matching Page 13 of PDF."""
     st.markdown("---")
     st.markdown("""
     <div style="font-size: 0.8rem; color: #64748b; text-align: center; padding: 1.5rem 0; line-height: 1.5;">
-        <strong>Research Disclaimer:</strong> This application is a product of AI-generated equity research simulation. 
-        It is provided for research and educational purposes only and is not investment advice, a research recommendation, 
-        or a personalized Buy/Sell/Hold call. Financial figures and event dates can change; users should verify primary 
-        exchange disclosures before making financial decisions.
+        <strong>Research disclaimer:</strong> This application provides educational decision support, not investment advice or a recommendation. Market data may be secondary-sourced; verify company and exchange filings before making financial decisions.
     </div>
     """, unsafe_allow_html=True)

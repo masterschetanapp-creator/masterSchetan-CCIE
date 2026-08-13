@@ -256,7 +256,7 @@ class MultiModelLLMClient:
         # Fallback empty JSON or default text
         if json_mode:
             return "{}"
-        return "AI analysis generated from primary financial disclosures."
+        return "AI analysis is unavailable. Use the evidence tracker and verify company filings."
 
     def generate_json(self, prompt: str, system_instruction: str = None, 
                       temperature: float = 0.3, task_type: str = 'analysis') -> dict:

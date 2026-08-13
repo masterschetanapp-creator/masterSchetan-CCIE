@@ -1,414 +1,339 @@
-"""
-Fetches ALL stock data from yfinance. This is the PRIMARY data source.
-Converts DataFrames to clean, JSON-serializable structures.
-Includes Phase 1 (NSE Delivery & Bulk Deals), Phase 2 (Segment Revenue Breakdown), & Expanded Resources (Analyst Targets, CRISIL Credit Ratings, USFDA Status).
+"""Secondary-market data adapter for CCIE.
+
+This module deliberately does not infer exchange disclosures. Yahoo Finance data
+is useful for a market snapshot, but it is not a primary filing and it cannot
+reliably identify a statement as standalone or consolidated. Every returned
+statement is tagged accordingly so downstream decisions can keep that boundary.
 """
 
-import yfinance as yf
-import pandas as pd
-import numpy as np
+from typing import Any, Dict, List
 import re
-from typing import Dict, Any, List
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+
+
+UNKNOWN = "UNKNOWN"
+SECONDARY_EVIDENCE = {
+    "source_type": "SECONDARY_MARKET_DATA",
+    "verification_status": "SECONDARY_ONLY",
+}
+
 
 def convert_types(obj: Any) -> Any:
-    """Recursively convert pandas/numpy types to native python types for JSON."""
+    """Recursively convert pandas and NumPy values to JSON-safe Python values."""
     if isinstance(obj, (np.integer, int)):
         return int(obj)
-    elif isinstance(obj, (np.floating, float)):
-        if np.isnan(obj) or np.isinf(obj):
-            return None
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return [convert_types(x) for x in obj]
-    elif isinstance(obj, pd.Timestamp):
+    if isinstance(obj, (np.floating, float)):
+        return None if np.isnan(obj) or np.isinf(obj) else float(obj)
+    if isinstance(obj, np.ndarray):
+        return [convert_types(item) for item in obj]
+    if isinstance(obj, pd.Timestamp):
         return obj.isoformat()
-    elif isinstance(obj, dict):
-        return {str(k.isoformat() if hasattr(k, 'isoformat') else k): convert_types(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_types(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(key.isoformat() if hasattr(key, "isoformat") else key): convert_types(value) for key, value in obj.items()}
+    if isinstance(obj, list):
+        return [convert_types(item) for item in obj]
     return obj
 
 
-def df_to_yearly_dicts(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Convert pandas DataFrame where columns are dates and rows are metric names into a list of yearly dicts."""
+def _statement_date(column: Any) -> str:
+    return str(column.date()) if hasattr(column, "date") else str(column)
+
+
+def _sorted_statement_columns(df: pd.DataFrame) -> List[Any]:
+    """Return financial-statement columns newest first, regardless of provider order."""
+    return sorted(list(df.columns), key=lambda column: pd.to_datetime(column, errors="coerce"), reverse=True)
+
+
+def df_to_yearly_dicts(
+    df: pd.DataFrame,
+    statement_frequency: str = "annual",
+    statement_scope: str = UNKNOWN,
+) -> List[Dict[str, Any]]:
+    """Convert a statement table to newest-first records with period and scope tags."""
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return []
-    records = []
-    for col in df.columns:
-        date_str = str(col.date()) if hasattr(col, 'date') else str(col)
-        year_data = {'date': date_str}
-        for metric, val in df[col].items():
-            if pd.notna(val):
-                if isinstance(val, (np.integer, int)):
-                    year_data[str(metric)] = int(val)
-                elif isinstance(val, (np.floating, float)):
-                    if not (np.isnan(val) or np.isinf(val)):
-                        year_data[str(metric)] = float(val)
-                else:
-                    year_data[str(metric)] = str(val)
-        records.append(year_data)
+
+    frequency = str(statement_frequency or "annual").lower()
+    records: List[Dict[str, Any]] = []
+    for index, column in enumerate(_sorted_statement_columns(df)):
+        period_end = _statement_date(column)
+        record: Dict[str, Any] = {
+            "date": period_end,
+            "period_end": period_end,
+            "reporting_period": f"latest_{frequency}" if index == 0 else f"historical_{frequency}",
+            "statement_scope": statement_scope or UNKNOWN,
+            **SECONDARY_EVIDENCE,
+        }
+        for metric, value in df[column].items():
+            if pd.isna(value):
+                continue
+            if isinstance(value, (np.integer, int)):
+                record[str(metric)] = int(value)
+            elif isinstance(value, (np.floating, float)):
+                if not (np.isnan(value) or np.isinf(value)):
+                    record[str(metric)] = float(value)
+            else:
+                record[str(metric)] = str(value)
+        records.append(record)
     return records
 
 
 def df_to_display_table(df: pd.DataFrame) -> Dict[str, Any]:
-    """Convert financial DataFrame into a displayable table dictionary."""
+    """Convert a financial DataFrame to a display table without invented values."""
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return {"columns": [], "data": []}
-    
-    cols = [str(c.date()) if hasattr(c, 'date') else str(c) for c in df.columns]
+
+    columns = [_statement_date(column) for column in _sorted_statement_columns(df)]
     rows = []
-    
     for metric, row in df.iterrows():
-        row_dict = {"Metric": str(metric)}
-        for col_raw, col_formatted in zip(df.columns, cols):
-            val = row[col_raw]
-            if pd.isna(val):
-                row_dict[col_formatted] = "-"
-            elif isinstance(val, (int, float, np.number)):
-                val_float = float(val)
-                if abs(val_float) >= 1e7:
-                    row_dict[col_formatted] = f"₹{val_float / 1e7:,.2f} Cr"
-                elif abs(val_float) >= 1e5:
-                    row_dict[col_formatted] = f"₹{val_float / 1e5:,.2f} L"
-                else:
-                    row_dict[col_formatted] = f"{val_float:,.2f}"
+        display_row = {"Metric": str(metric)}
+        for column, label in zip(_sorted_statement_columns(df), columns):
+            value = row[column]
+            if pd.isna(value):
+                display_row[label] = UNKNOWN
+            elif isinstance(value, (int, float, np.number)):
+                value_float = float(value)
+                display_row[label] = f"{value_float / 1e7:,.2f} Cr" if abs(value_float) >= 1e7 else f"{value_float:,.2f}"
             else:
-                row_dict[col_formatted] = str(val)
-        rows.append(row_dict)
-        
-    return {"columns": ["Metric"] + cols, "data": rows}
+                display_row[label] = str(value)
+        rows.append(display_row)
+    return {"columns": ["Metric"] + columns, "data": rows}
 
 
-# ── Expanded Resources Engine: Analyst Targets, CRISIL Ratings, USFDA ──
 def fetch_expanded_resources(ticker: yf.Ticker, info: dict, symbol: str) -> Dict[str, Any]:
-    """Expanded data resources: Sell-side consensus targets, CRISIL debt ratings, USFDA status."""
-    # 1. Analyst Consensus Targets
-    t_high = info.get("targetHighPrice")
-    t_mean = info.get("targetMeanPrice")
-    t_low = info.get("targetLowPrice")
-    rec = str(info.get("recommendationKey", "BUY")).upper().replace("_", " ")
-    num_analysts = info.get("numberOfAnalystOpinions", 0)
-    
-    target_high_fmt = f"₹{float(t_high):,.2f}" if isinstance(t_high, (int, float)) else "N/A"
-    target_mean_fmt = f"₹{float(t_mean):,.2f}" if isinstance(t_mean, (int, float)) else "N/A"
-    target_low_fmt = f"₹{float(t_low):,.2f}" if isinstance(t_low, (int, float)) else "N/A"
-    
-    # 2. CRISIL / ICRA Credit Rating
-    m_cap = info.get("marketCap", 0)
-    if m_cap >= 5e10:
-        credit_rating = "CRISIL AAA / Stable (Highest Safety)"
-    elif m_cap >= 1e10:
-        credit_rating = "ICRA AA+ / Stable (High Safety)"
-    else:
-        credit_rating = "CARE A+ / Stable (Adequate Safety)"
-        
-    # 3. USFDA Inspection Status (Pharma)
-    ind = str(info.get("industry", ""))
-    sec = str(info.get("sector", ""))
-    if "Pharma" in ind or "Drug" in ind or "Health" in sec:
-        fda_status = "USFDA Inspected & Compliant (Form 483 / Warning Letter Monitoring Active)"
-    else:
-        fda_status = "N/A (Non-Pharma Sector)"
-        
+    """Expose supplied consensus targets without a CCIE recommendation or synthetic ratings."""
     return {
-        "recommendation": rec,
-        "num_analysts": num_analysts,
-        "target_high": target_high_fmt,
-        "target_mean": target_mean_fmt,
-        "target_low": target_low_fmt,
-        "credit_rating": credit_rating,
-        "fda_status": fda_status
+        **SECONDARY_EVIDENCE,
+        "analyst_target_high": info.get("targetHighPrice") if isinstance(info.get("targetHighPrice"), (int, float)) else None,
+        "analyst_target_mean": info.get("targetMeanPrice") if isinstance(info.get("targetMeanPrice"), (int, float)) else None,
+        "analyst_target_low": info.get("targetLowPrice") if isinstance(info.get("targetLowPrice"), (int, float)) else None,
+        "analyst_opinion_count": info.get("numberOfAnalystOpinions") if isinstance(info.get("numberOfAnalystOpinions"), int) else None,
+        "credit_rating": UNKNOWN,
+        "regulatory_status": UNKNOWN,
     }
 
 
-# ── Phase 1 Engine: NSE Delivery & Bulk Deals ──────────────────────
 def fetch_delivery_and_bulk_deals(ticker: yf.Ticker, info: dict, symbol: str) -> Dict[str, Any]:
-    """Phase 1: Calculate NSE Delivery Position % & Bulk/Block Deal Register."""
-    vol = info.get("volume") or info.get("regularMarketVolume") or 0
-    avg_vol = info.get("averageVolume") or 1
-    
-    inst_pct = (info.get("heldPercentInstitutions") or 0.25) * 100
-    base_del = 35.0 + (inst_pct * 0.35)
-    vol_ratio = (vol / avg_vol) if avg_vol else 1.0
-    
-    del_pct = min(85.0, max(28.0, base_del * (0.8 + 0.4 * min(vol_ratio, 2.0))))
-    
-    if del_pct >= 50.0:
-        del_status = "High Institutional Delivery Accumulation"
-        badge_class = "badge-confirmed"
-    elif del_pct >= 35.0:
-        del_status = "Normal Delivery & Intraday Mix"
-        badge_class = "badge-guidance"
-    else:
-        del_status = "High Intraday Speculative Traded Volume"
-        badge_class = "badge-estimate"
-        
-    bulk_deals = [
-        {"Date": "Recent Quarter", "Institutional Investor": "Foreign / Domestic Institutional Funds", "Transaction Type": "Market Block Accumulation", "Share Price": f"₹{info.get('currentPrice', 0):,.2f}", "Status": "Completed"}
-    ]
-    
+    """Exchange-only delivery and bulk-deal information requires an exchange feed."""
     return {
-        "delivery_pct": f"{del_pct:.2f}%",
-        "delivery_status": del_status,
-        "badge_class": badge_class,
-        "bulk_deals": bulk_deals
+        "delivery_pct": None,
+        "delivery_status": UNKNOWN,
+        "bulk_deals": [],
+        "source_type": UNKNOWN,
+        "verification_status": "UNVERIFIED",
     }
 
 
-# ── Phase 2 Engine: Segment Revenue Breakdown & Trajectory ──────────
 def fetch_segment_breakdown_and_trajectory(ticker: yf.Ticker, info: dict, symbol: str) -> Dict[str, Any]:
-    """Phase 2: Extract segment revenue breakdown & multi-year financial trajectory."""
-    sym_upper = symbol.upper()
-    sector = info.get("sector", "")
-    
-    if "PNB" in sym_upper or "SBIN" in sym_upper or "BANK" in sym_upper:
-        segments = [
-            {"Business Segment / Division": "Retail & Consumer Banking", "Revenue Share": "42%", "Growth Trajectory": "Expanding (+14% YoY)"},
-            {"Business Segment / Division": "Corporate & Commercial Banking", "Revenue Share": "38%", "Growth Trajectory": "Steady (+11% YoY)"},
-            {"Business Segment / Division": "Treasury & Investment Operations", "Revenue Share": "20%", "Growth Trajectory": "Market Linked"}
-        ]
-    elif "RELIANCE" in sym_upper:
-        segments = [
-            {"Business Segment / Division": "Oil to Chemicals (O2C)", "Revenue Share": "52%", "Growth Trajectory": "Core Cash Generator"},
-            {"Business Segment / Division": "Jio Digital & Telecom Services", "Revenue Share": "26%", "Growth Trajectory": "High Growth (+18% YoY)"},
-            {"Business Segment / Division": "Reliance Retail Operations", "Revenue Share": "22%", "Growth Trajectory": "Rapid Expansion (+21% YoY)"}
-        ]
-    elif "SUZLON" in sym_upper:
-        segments = [
-            {"Business Segment / Division": "Wind Turbine Generator (WTG) Sales", "Revenue Share": "74%", "Growth Trajectory": "Record Order Execution"},
-            {"Business Segment / Division": "Operation & Maintenance Services (OMS)", "Revenue Share": "26%", "Growth Trajectory": "High Margin Annuity Income"}
-        ]
-    elif "TCS" in sym_upper or "INFY" in sym_upper or "IT" in sector:
-        segments = [
-            {"Business Segment / Division": "Banking, Financial Services & Insurance (BFSI)", "Revenue Share": "32%", "Growth Trajectory": "Core Enterprise Vertical"},
-            {"Business Segment / Division": "Consumer Business & Retail", "Revenue Share": "17%", "Growth Trajectory": "Steady Digital Demand"},
-            {"Business Segment / Division": "Life Sciences & Healthcare", "Revenue Share": "11%", "Growth Trajectory": "Expanding (+12% YoY)"},
-            {"Business Segment / Division": "Technology & Services", "Revenue Share": "40%", "Growth Trajectory": "Cloud & AI Managed Services"}
-        ]
-    else:
-        segments = [
-            {"Business Segment / Division": "Primary Operating Division", "Revenue Share": "68%", "Growth Trajectory": "Core Revenue Driver"},
-            {"Business Segment / Division": "Secondary Products & Services", "Revenue Share": "32%", "Growth Trajectory": "Expanding Line"}
-        ]
-
-    return {"segment_breakdown": segments}
+    """Segment figures are only available after parsing an annual-report disclosure."""
+    return {
+        "segment_breakdown": [],
+        "source_type": UNKNOWN,
+        "verification_status": "UNVERIFIED",
+    }
 
 
 def fetch_automated_meta(ticker: yf.Ticker, info: dict, symbol: str) -> Dict[str, Any]:
-    """Automated metadata extractor for any stock."""
-    listing_date = "Official Listing"
+    """Extract only metadata that can be read directly from the secondary payload."""
+    founding_year = None
+    description = str(info.get("longBusinessSummary") or "")
+    match = re.findall(r"(?:incorporated|founded|established|started|formed)\s+in\s+(\d{4})", description, re.IGNORECASE)
+    if match:
+        founding_year = match[0]
+
+    listing_date = None
     try:
-        hist_max = ticker.history(period="max")
-        if not hist_max.empty:
-            listing_date = str(hist_max.index[0].date())
-    except Exception:
-        pass
-    
-    founding_year = "Incorporated"
-    desc = info.get("longBusinessSummary", "")
-    m = re.findall(r'(?:incorporated|founded|established|started|formed)\s+in\s+(\d{4})', desc, re.IGNORECASE)
-    if m:
-        founding_year = m[0]
-        
-    upcoming_earnings = "Tentative quarterly window"
-    try:
-        cal = getattr(ticker, 'calendar', {})
-        if isinstance(cal, dict) and 'Earnings Date' in cal:
-            ed = cal['Earnings Date']
-            if ed and len(ed) > 0:
-                upcoming_earnings = str(ed[0])
+        history = ticker.history(period="max")
+        if not history.empty:
+            listing_date = str(history.index[0].date())
     except Exception:
         pass
 
-    insiders = info.get("heldPercentInsiders")
-    promoter_pct = f"{insiders * 100:.2f}%" if isinstance(insiders, (int, float)) else "Promoter Group Controlled"
-    
-    inst = info.get("heldPercentInstitutions")
-    inst_pct = f"{inst * 100:.2f}%" if isinstance(inst, (int, float)) else "Institutional Participation"
+    upcoming_earnings = None
+    try:
+        calendar = getattr(ticker, "calendar", {})
+        if isinstance(calendar, dict) and calendar.get("Earnings Date"):
+            upcoming_earnings = str(calendar["Earnings Date"][0])
+    except Exception:
+        pass
 
     return {
         "founding_year": founding_year,
         "listing_date": listing_date,
         "upcoming_earnings": upcoming_earnings,
-        "promoter_pct": promoter_pct,
-        "inst_pct": inst_pct
+        "shareholding": UNKNOWN,
+        **SECONDARY_EVIDENCE,
     }
 
 
 def fetch_stock_profile(symbol: str) -> Dict[str, Any]:
-    """Company profile."""
+    """Fetch a secondary company profile."""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info or {}
-        auto_meta = fetch_automated_meta(ticker, info, symbol)
-        
         return convert_types({
             "name": info.get("longName") or info.get("shortName") or symbol,
-            "sector": info.get("sector", "N/A"),
-            "industry": info.get("industry", "N/A"),
-            "description": info.get("longBusinessSummary", "Company description not available."),
-            "website": info.get("website", ""),
-            "employees": info.get("fullTimeEmployees", None),
-            "market_cap": info.get("marketCap", None),
-            "current_price": info.get("currentPrice", None),
-            "fifty_two_week_high": info.get("fiftyTwoWeekHigh", None),
-            "fifty_two_week_low": info.get("fiftyTwoWeekLow", None),
-            "trailing_pe": info.get("trailingPE", None),
-            "forward_pe": info.get("forwardPE", None),
-            "price_to_book": info.get("priceToBook", None),
-            "debt_to_equity": info.get("debtToEquity", None),
-            "return_on_equity": info.get("returnOnEquity", None),
-            "dividend_yield": info.get("dividendYield", None),
+            "sector": info.get("sector") or UNKNOWN,
+            "industry": info.get("industry") or UNKNOWN,
+            "description": info.get("longBusinessSummary") or UNKNOWN,
+            "website": info.get("website") or None,
+            "employees": info.get("fullTimeEmployees"),
+            "market_cap": info.get("marketCap"),
+            "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+            "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
+            "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
+            "trailing_pe": info.get("trailingPE"),
+            "forward_pe": info.get("forwardPE"),
+            "price_to_book": info.get("priceToBook"),
+            "debt_to_equity": info.get("debtToEquity"),
+            "return_on_equity": info.get("returnOnEquity"),
+            "dividend_yield": info.get("dividendYield"),
             "officers": info.get("companyOfficers", []),
-            "auto_meta": auto_meta
+            "auto_meta": fetch_automated_meta(ticker, info, symbol),
+            **SECONDARY_EVIDENCE,
         })
-    except Exception as e:
-        print(f"Error fetching profile for {symbol}: {e}")
-        return {}
+    except Exception:
+        return {"name": symbol, "source_type": UNKNOWN, "verification_status": "UNVERIFIED"}
 
 
 def fetch_price_data(symbol: str) -> Dict[str, Any]:
-    """Current price, change%, 52W high/low, volume, VWAP."""
+    """Fetch a secondary market-price snapshot; unavailable values remain UNKNOWN."""
     try:
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="1mo")
-        if hist.empty:
+        history = ticker.history(period="1mo")
+        if history.empty:
             info = ticker.info or {}
-            current_val = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or info.get("regularMarketPreviousClose") or 0.0
-            prev_val = info.get("regularMarketPreviousClose") or info.get("previousClose") or current_val
-            change_pct = ((current_val - prev_val) / prev_val) * 100 if prev_val else 0.0
+            current = info.get("currentPrice") or info.get("regularMarketPrice")
+            previous = info.get("regularMarketPreviousClose") or info.get("previousClose")
+            change = ((current - previous) / previous) * 100 if isinstance(current, (int, float)) and isinstance(previous, (int, float)) and previous else None
             return convert_types({
-                "current_price": current_val,
-                "change_percent": change_pct,
-                "volume": info.get("volume") or info.get("regularMarketVolume") or 0,
-                "vwap": current_val,
-                "history": []
+                "current_price": current,
+                "change_percent": change,
+                "volume": info.get("volume") or info.get("regularMarketVolume"),
+                "vwap": None,
+                "history": [],
+                **SECONDARY_EVIDENCE,
             })
-            
-        current = float(hist['Close'].iloc[-1])
-        prev = float(hist['Close'].iloc[-2]) if len(hist) > 1 else current
-        change_pct = ((current - prev) / prev) * 100 if prev else 0.0
-        vwap = (hist['Close'] * hist['Volume']).sum() / hist['Volume'].sum() if hist['Volume'].sum() > 0 else current
-        
-        hist_records = []
-        for idx, row in hist.iterrows():
-            hist_records.append({
-                "Date": str(idx.date()) if hasattr(idx, 'date') else str(idx),
-                "Close": float(row["Close"]),
-                "Volume": int(row["Volume"])
-            })
-            
+
+        current = float(history["Close"].iloc[-1])
+        previous = float(history["Close"].iloc[-2]) if len(history) > 1 else None
+        change = ((current - previous) / previous) * 100 if previous else None
+        volume_sum = history["Volume"].sum()
+        vwap = (history["Close"] * history["Volume"]).sum() / volume_sum if volume_sum > 0 else None
+        history_rows = [
+            {"Date": _statement_date(index), "Close": float(row["Close"]), "Volume": int(row["Volume"])}
+            for index, row in history.iterrows()
+        ]
         return convert_types({
             "current_price": current,
-            "change_percent": change_pct,
-            "volume": int(hist['Volume'].iloc[-1]),
+            "change_percent": change,
+            "volume": int(history["Volume"].iloc[-1]),
             "vwap": vwap,
-            "history": hist_records
+            "history": history_rows,
+            **SECONDARY_EVIDENCE,
         })
-    except Exception as e:
-        print(f"Error fetching price data for {symbol}: {e}")
-        return {"current_price": 0.0, "change_percent": 0.0, "volume": 0, "vwap": 0.0, "history": []}
+    except Exception:
+        return {
+            "current_price": None,
+            "change_percent": None,
+            "volume": None,
+            "vwap": None,
+            "history": [],
+            "source_type": UNKNOWN,
+            "verification_status": "UNVERIFIED",
+        }
 
 
 def fetch_financial_statements(symbol: str) -> Dict[str, Any]:
-    """Fetch financial statements."""
+    """Fetch annual and quarterly statements separately; never merge their scope."""
     try:
         ticker = yf.Ticker(symbol)
-        inc = ticker.financials
-        bs = ticker.balance_sheet
-        cf = ticker.cashflow
-        q_inc = ticker.quarterly_financials
-        
+        annual_income = ticker.financials
+        annual_balance = ticker.balance_sheet
+        annual_cashflow = ticker.cashflow
+        quarterly_income = ticker.quarterly_financials
+        quarterly_balance = ticker.quarterly_balance_sheet
+        quarterly_cashflow = ticker.quarterly_cashflow
         return convert_types({
-            "annual_income_stmt": df_to_yearly_dicts(inc),
-            "annual_balance_sheet": df_to_yearly_dicts(bs),
-            "annual_cashflow": df_to_yearly_dicts(cf),
-            "quarterly_income_stmt": df_to_yearly_dicts(q_inc),
-            "display_income_statement": df_to_display_table(inc),
-            "display_balance_sheet": df_to_display_table(bs),
-            "display_cash_flow": df_to_display_table(cf),
-            "display_quarterly_income": df_to_display_table(q_inc),
+            "annual_income_stmt": df_to_yearly_dicts(annual_income, "annual"),
+            "annual_balance_sheet": df_to_yearly_dicts(annual_balance, "annual"),
+            "annual_cashflow": df_to_yearly_dicts(annual_cashflow, "annual"),
+            "quarterly_income_stmt": df_to_yearly_dicts(quarterly_income, "quarterly"),
+            "quarterly_balance_sheet": df_to_yearly_dicts(quarterly_balance, "quarterly"),
+            "quarterly_cashflow": df_to_yearly_dicts(quarterly_cashflow, "quarterly"),
+            "display_income_statement": df_to_display_table(annual_income),
+            "display_balance_sheet": df_to_display_table(annual_balance),
+            "display_cash_flow": df_to_display_table(annual_cashflow),
+            "display_quarterly_income": df_to_display_table(quarterly_income),
+            **SECONDARY_EVIDENCE,
         })
-    except Exception as e:
-        print(f"Error fetching financials for {symbol}: {e}")
+    except Exception:
         return {
             "annual_income_stmt": [], "annual_balance_sheet": [], "annual_cashflow": [],
+            "quarterly_income_stmt": [], "quarterly_balance_sheet": [], "quarterly_cashflow": [],
             "display_income_statement": {"columns": [], "data": []},
             "display_balance_sheet": {"columns": [], "data": []},
             "display_cash_flow": {"columns": [], "data": []},
+            "display_quarterly_income": {"columns": [], "data": []},
+            "source_type": UNKNOWN,
+            "verification_status": "UNVERIFIED",
         }
 
 
 def fetch_dividends_and_actions(symbol: str) -> Dict[str, Any]:
-    """Dividend history, stock splits."""
+    """Fetch raw dividend and split history, retaining numerical dividend amounts."""
     try:
         ticker = yf.Ticker(symbol)
-        dividends = ticker.dividends if hasattr(ticker, 'dividends') else pd.Series()
-        splits = ticker.splits if hasattr(ticker, 'splits') else pd.Series()
-        
-        div_list = []
-        if not dividends.empty:
-            dividends_sorted = dividends.sort_index(ascending=False).head(15)
-            for dt, val in dividends_sorted.items():
-                div_list.append({
-                    "Date": str(dt.date()) if hasattr(dt, 'date') else str(dt),
-                    "Dividend (₹)": float(val)
-                })
-                
-        split_list = []
-        if not splits.empty:
-            splits_sorted = splits.sort_index(ascending=False).head(10)
-            for dt, val in splits_sorted.items():
-                split_list.append({
-                    "Date": str(dt.date()) if hasattr(dt, 'date') else str(dt),
-                    "Split Ratio": float(val)
-                })
-                
-        return {"dividends": div_list, "splits": split_list}
-    except Exception as e:
-        print(f"Error fetching actions for {symbol}: {e}")
-        return {"dividends": [], "splits": []}
+        dividends = ticker.dividends if hasattr(ticker, "dividends") else pd.Series()
+        splits = ticker.splits if hasattr(ticker, "splits") else pd.Series()
+        dividend_rows = [
+            {"Date": _statement_date(date), "amount": float(value), "Dividend": float(value), **SECONDARY_EVIDENCE}
+            for date, value in dividends.sort_index(ascending=False).items()
+        ] if not dividends.empty else []
+        split_rows = [
+            {"Date": _statement_date(date), "Split Ratio": float(value), **SECONDARY_EVIDENCE}
+            for date, value in splits.sort_index(ascending=False).items()
+        ] if not splits.empty else []
+        return {"dividends": dividend_rows, "splits": split_rows, **SECONDARY_EVIDENCE}
+    except Exception:
+        return {"dividends": [], "splits": [], "source_type": UNKNOWN, "verification_status": "UNVERIFIED"}
 
 
 def fetch_holders(symbol: str) -> Dict[str, Any]:
-    """Major holders, institutional holders, mutual fund holders."""
+    """Return provider holder tables without mapping them to exchange taxonomy."""
     try:
         ticker = yf.Ticker(symbol)
-        maj = ticker.major_holders
-        inst = ticker.institutional_holders
-        mf = ticker.mutualfund_holders
-        
-        maj_dict = {}
-        if isinstance(maj, pd.DataFrame) and not maj.empty:
-            for _, row in maj.iterrows():
-                if len(row) >= 2:
-                    maj_dict[str(row.iloc[1])] = str(row.iloc[0])
-                    
+        major = ticker.major_holders
+        institutional = ticker.institutional_holders
+        mutual_funds = ticker.mutualfund_holders
+        major_rows = major.to_dict(orient="records") if isinstance(major, pd.DataFrame) and not major.empty else []
+        institutional_rows = institutional.to_dict(orient="records") if isinstance(institutional, pd.DataFrame) and not institutional.empty else []
+        mutual_fund_rows = mutual_funds.to_dict(orient="records") if isinstance(mutual_funds, pd.DataFrame) and not mutual_funds.empty else []
         return convert_types({
-            "major_holders": maj_dict,
-            "institutional_holders": inst.to_dict(orient="records") if isinstance(inst, pd.DataFrame) and not inst.empty else [],
-            "mutual_fund_holders": mf.to_dict(orient="records") if isinstance(mf, pd.DataFrame) and not mf.empty else []
+            "major_holders": major_rows,
+            "institutional_holders": institutional_rows,
+            "mutual_fund_holders": mutual_fund_rows,
+            "shareholding_taxonomy": UNKNOWN,
+            **SECONDARY_EVIDENCE,
         })
-    except Exception as e:
-        print(f"Error fetching holders for {symbol}: {e}")
-        return {"major_holders": {}, "institutional_holders": [], "mutual_fund_holders": []}
+    except Exception:
+        return {"major_holders": [], "institutional_holders": [], "mutual_fund_holders": [], "source_type": UNKNOWN, "verification_status": "UNVERIFIED"}
 
 
 def fetch_all_data(symbol: str) -> Dict[str, Any]:
-    """Master function."""
+    """Build a raw secondary-data packet with no derived exchange claims."""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info or {}
-    except Exception as e:
-        print(f"Error fetching info for {symbol}: {e}")
+    except Exception:
+        ticker = yf.Ticker(symbol)
         info = {}
 
-    actions_data = fetch_dividends_and_actions(symbol)
+    actions = fetch_dividends_and_actions(symbol)
     financials = fetch_financial_statements(symbol)
-    phase1_data = fetch_delivery_and_bulk_deals(ticker, info, symbol)
-    phase2_data = fetch_segment_breakdown_and_trajectory(ticker, info, symbol)
-    expanded_data = fetch_expanded_resources(ticker, info, symbol)
-
     return {
         "info": info,
         "profile": fetch_stock_profile(symbol),
@@ -417,10 +342,14 @@ def fetch_all_data(symbol: str) -> Dict[str, Any]:
         "annual_income_stmt": financials.get("annual_income_stmt", []),
         "annual_balance_sheet": financials.get("annual_balance_sheet", []),
         "annual_cashflow": financials.get("annual_cashflow", []),
-        "dividends": actions_data.get("dividends", []),
-        "actions": actions_data.get("splits", []),
+        "quarterly_income_stmt": financials.get("quarterly_income_stmt", []),
+        "quarterly_balance_sheet": financials.get("quarterly_balance_sheet", []),
+        "quarterly_cashflow": financials.get("quarterly_cashflow", []),
+        "dividends": actions.get("dividends", []),
+        "actions": actions.get("splits", []),
         "holders": fetch_holders(symbol),
-        "phase1_nse": phase1_data,
-        "phase2_segments": phase2_data.get("segment_breakdown", []),
-        "expanded_resources": expanded_data
+        "phase1_nse": fetch_delivery_and_bulk_deals(ticker, info, symbol),
+        "phase2_segments": fetch_segment_breakdown_and_trajectory(ticker, info, symbol).get("segment_breakdown", []),
+        "expanded_resources": fetch_expanded_resources(ticker, info, symbol),
+        **SECONDARY_EVIDENCE,
     }

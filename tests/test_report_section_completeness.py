@@ -9,23 +9,21 @@ from analysis.report_completeness_validator import ReportCompletenessValidator
 def test_completeness_validator():
     validator = ReportCompletenessValidator()
     
-    # 1. Full dossier test
-    full_dossier = {
-        "decision_support": {"tip_check": {}},
+    # A sparse dossier must not receive an invented +13 section credit.
+    sparse_dossier = {
+        "decision_support": {"tip_check": {"rows": []}, "research_status": "UNKNOWN"},
         "modules": {
             "company_snapshot": {"name": "ONGC"},
-            "strengths_weaknesses": {},
             "computed_metrics": {"valuation": {}, "profitability": {}, "growth": {}, "debt_metrics": {}, "cash_flow_quality": {}},
-            "company_profile_narrative": {},
-            "holders": {},
             "red_flags": [],
             "dividends": [],
-            "source_tracking": {}
+            "source_tracking": {"claims": []}
         }
     }
 
-    res = validator.validate_completeness(full_dossier)
-    assert res["completed_count"] >= 15
+    res = validator.validate_completeness(sparse_dossier)
+    assert res["completed_count"] < 15
+    assert res["completed_count"] + res["missing_count"] == 26
     assert "badge_text" in res
 
     # 2. Empty dossier test

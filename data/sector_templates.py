@@ -9,6 +9,12 @@ class CompanyClassification:
 
 
 SECTOR_METRICS: dict[str, dict] = {
+    "unknown": {
+        "name": "Unclassified / Evidence Required",
+        "metrics": [],
+        "key_questions": ["Which regulated sector classification is supported by an exchange filing?"],
+        "analysis_template": "Do not apply a sector model until the company classification is verified."
+    },
     "banks": {
         "name": "Banking",
         "metrics": ["NIM", "CASA Ratio", "GNPA", "NNPA", "Slippages", "Credit Cost", "CET1", "ROA"],
@@ -177,7 +183,7 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
     Normalizes sector + industry + company_name + symbol into a single canonical company_type string code.
     Must return one of: "BANK", "NBFC", "INSURANCE", "IT", "PHARMA", "AUTO", "WIND_EQUIPMENT", 
     "OIL_GAS_E&P", "OIL_GAS_INTEGRATED", "REFINING_MARKETING", "GAS_TRANSMISSION", "OILFIELD_SERVICES",
-    "CAPITAL_GOODS", "DEFENCE", "RETAIL", "FMCG", "REAL_ESTATE", "METALS", "UTILITIES", "TELECOM", "DEFAULT".
+    "CAPITAL_GOODS", "DEFENCE", "RETAIL", "FMCG", "REAL_ESTATE", "METALS", "UTILITIES", "TELECOM", "UNKNOWN".
     """
     s_lower = str(sector or "").lower()
     i_lower = str(industry or "").lower()
@@ -187,7 +193,7 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
     text = f"{s_lower} {i_lower} {c_lower} {sym_upper}"
 
     # 1. Wind Turbine & Equipment Manufacturing (MUST PRECEDE generic utilities/power)
-    if "suzlon" in text or "wind turbine" in text or "wind equipment" in text or "wind generator" in text:
+    if "SUZLON" in sym_upper or "suzlon" in text or "wind turbine" in text or "wind equipment" in text or "wind generator" in text:
         return "WIND_EQUIPMENT"
 
     # 2. Oil & Gas Sub-Sectors (MUST PRECEDE generic utilities and metals!)
@@ -287,7 +293,7 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
     if any(k in sym_upper for k in ["BHARTIARTL", "IDEA", "INDUSTOWERS"]) or "telecom" in text:
         return "TELECOM"
 
-    return "DEFAULT"
+    return "UNKNOWN"
 
 
 def get_sector_template(company_type: str) -> dict:
@@ -317,7 +323,7 @@ def get_sector_template(company_type: str) -> dict:
         "RETAIL": SECTOR_METRICS["fmcg"],
         "TELECOM": SECTOR_METRICS["it"]
     }
-    return mapping.get(c_type, SECTOR_METRICS["capital_goods"])
+    return mapping.get(c_type, SECTOR_METRICS["unknown"])
 
 
 def classify_sector(sector: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> dict:
@@ -329,7 +335,7 @@ def classify_sector(sector: str = "", industry: str = "", company_name: str = ""
 def get_company_classification(sector: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> CompanyClassification:
     """Returns a structured CompanyClassification object."""
     c_type = classify_company_type(sector, industry, company_name, symbol)
-    conf = "HIGH" if c_type != "DEFAULT" else "MEDIUM"
+    conf = "HIGH" if c_type != "UNKNOWN" else "UNKNOWN"
     return CompanyClassification(
         company_type=c_type,
         sector=sector or "Unknown Sector",

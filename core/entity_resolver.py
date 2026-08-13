@@ -2,14 +2,17 @@
 masterSchetan CCIE — Entity Resolver
 Resolves Indian stock names, brands, and search queries to valid NSE/BSE tickers.
 Includes comprehensive mapping for Nifty 50, Nifty Next 50, Midcap 100, Smallcap 250 & recent IPOs.
-Integrates dynamic Yahoo Finance API search for 100% coverage across all 2,000+ NSE & BSE listed equities.
+Integrates dynamic Yahoo Finance API search as a secondary ticker-discovery fallback.
 Supports partial, full, and brand name matching (e.g. 'SJVN', 'SJVN Limited', 'Tata Power', 'Mazagon', 'IRCTC').
 """
 
 import logging
 import re
 from typing import Dict, Optional, List
-import yfinance as yf
+try:
+    import yfinance as yf
+except ImportError:
+    yf = None
 import difflib
 
 logger = logging.getLogger(__name__)
@@ -70,6 +73,8 @@ COMMON_STOCKS = {
     # Banking & Financial Services
     "PNB": {"symbol": "PNB.NS", "name": "Punjab National Bank", "exchange": "NSE"},
     "PUNJAB NATIONAL BANK": {"symbol": "PNB.NS", "name": "Punjab National Bank", "exchange": "NSE"},
+    "MAHABANK": {"symbol": "MAHABANK.NS", "name": "Bank of Maharashtra", "exchange": "NSE"},
+    "BANK OF MAHARASHTRA": {"symbol": "MAHABANK.NS", "name": "Bank of Maharashtra", "exchange": "NSE"},
     "SBIN": {"symbol": "SBIN.NS", "name": "State Bank of India", "exchange": "NSE"},
     "SBI": {"symbol": "SBIN.NS", "name": "State Bank of India", "exchange": "NSE"},
     "STATE BANK OF INDIA": {"symbol": "SBIN.NS", "name": "State Bank of India", "exchange": "NSE"},
@@ -104,6 +109,8 @@ COMMON_STOCKS = {
     "M&MFIN": {"symbol": "M&MFIN.NS", "name": "Mahindra & Mahindra Financial", "exchange": "NSE"},
     "MANAPPURAM": {"symbol": "MANAPPURAM.NS", "name": "Manappuram Finance", "exchange": "NSE"},
     "POONAWALLA": {"symbol": "POONAWALLA.NS", "name": "Poonawalla Fincorp", "exchange": "NSE"},
+    "HDFCLIFE": {"symbol": "HDFCLIFE.NS", "name": "HDFC Life Insurance Company Limited", "exchange": "NSE"},
+    "HDFC LIFE": {"symbol": "HDFCLIFE.NS", "name": "HDFC Life Insurance Company Limited", "exchange": "NSE"},
 
     # Exchanges & Asset Managers
     "BSE": {"symbol": "BSE.NS", "name": "BSE Limited", "exchange": "NSE"},
@@ -323,7 +330,7 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
         seen_syms.add(s["symbol"])
 
     # 2. Direct Ticker Check on yfinance for untracked symbols (e.g. IDBI.NS)
-    if not results:
+    if not results and yf is not None:
         for root in [no_space_q, query_upper]:
             if not root:
                 continue
@@ -361,8 +368,8 @@ def search_stocks(query: str) -> List[Dict[str, str]]:
             if len(results) >= 5:
                 break
 
-    # 4. Dynamic yfinance.Search API for 100% BSE & NSE stock coverage
-    if len(results) < 3:
+    # 4. Dynamic yfinance.Search API as a secondary ticker-discovery fallback
+    if len(results) < 3 and yf is not None:
         try:
             yf_search = yf.Search(query, max_results=8)
             quotes = getattr(yf_search, "quotes", [])
@@ -427,7 +434,7 @@ def resolve_stock(query: str) -> Optional[Dict[str, str]]:
         return COMMON_STOCKS[no_space_q]
 
     # 2. Priority Direct Ticker Check on yfinance (e.g. IDBI.NS, MRF.NS, BOSCHLTD.NS)
-    for root in [no_space_q, query_upper]:
+    for root in ([no_space_q, query_upper] if yf is not None else []):
         if not root:
             continue
         for suffix in [".NS", ".BO"]:

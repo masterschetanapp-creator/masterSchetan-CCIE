@@ -1,513 +1,314 @@
-"""
-masterSchetan CCIE — Canonical Decision Support Engine
-Single source of truth for all quantitative & qualitative investment judgments.
-Renderers consume output from this engine; they NEVER determine conclusions independently.
-"""
+"""Canonical, evidence-gated decision support for all CCIE report views."""
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
+from analysis.metric_schema import UNKNOWN, first_known, is_unknown
+
 
 REQUIRED_METRICS: Dict[str, List[str]] = {
-    "BANK": ["net_profit", "loan_growth", "deposit_growth", "gnpa", "nnpa", "roa", "capital_adequacy", "pb_ratio"],
+    "BANK": ["net_profit", "revenue", "gnpa", "nnpa", "roa", "capital_adequacy", "pb_ratio"],
     "NBFC": ["net_profit", "aum_growth", "gnpa", "nnpa", "roa", "cost_of_borrowing", "pb_ratio"],
     "INSURANCE": ["net_profit", "vnb_margin", "ape_growth", "solvency_ratio", "persistency_ratio", "pb_ratio"],
-    "WIND_EQUIPMENT": ["revenue", "profit", "order_book", "deliveries", "commissioning", "receivables", "inventory", "net_debt_or_cash"],
-    "AUTO": ["revenue", "profit", "volumes", "margins", "debt_to_equity", "cash_flow"],
-    "IT": ["revenue", "profit", "operating_margin", "roe", "pe_ratio"],
-    "PHARMA": ["revenue", "profit", "operating_margin", "roe", "pe_ratio"],
-    "METALS": ["revenue", "profit", "operating_margin", "debt_to_equity", "pe_ratio"],
-    "DEFAULT": ["revenue", "profit", "operating_margin", "debt_to_equity", "roe", "cfo_to_pat", "pe_ratio"]
+    "WIND_EQUIPMENT": ["revenue", "net_profit", "order_book", "deliveries", "receivables", "net_debt_or_cash"],
+    "OIL_GAS_E&P": ["revenue", "net_profit", "production_volume", "net_realisation", "reserve_replacement_ratio", "debt_to_equity", "cash_flow"],
+    "OIL_GAS_INTEGRATED": ["revenue", "net_profit", "refining_margin", "upstream_production", "debt_to_equity", "cash_flow"],
+    "REFINING_MARKETING": ["revenue", "net_profit", "refining_margin", "throughput", "marketing_volume", "debt_to_equity"],
+    "GAS_TRANSMISSION": ["revenue", "net_profit", "transmission_volume", "tariff_realisation", "debt_to_equity", "cash_flow"],
+    "AUTO": ["revenue", "net_profit", "volumes", "operating_margin", "debt_to_equity", "cash_flow"],
+    "IT": ["revenue", "net_profit", "operating_margin", "roe", "pe_ratio"],
+    "PHARMA": ["revenue", "net_profit", "operating_margin", "roe", "pe_ratio"],
+    "DEFENCE": ["revenue", "net_profit", "order_book", "operating_margin", "cash_flow"],
+    "METALS": ["revenue", "net_profit", "operating_margin", "debt_to_equity", "pe_ratio"],
+    "UNKNOWN": ["revenue", "net_profit", "operating_margin", "debt_to_equity", "roe", "cash_flow", "pe_ratio"],
+}
+
+
+METRIC_PATHS = {
+    "revenue": [("financial_summary", "revenue"), ("growth", "revenue_cagr_1y")],
+    "net_profit": [("financial_summary", "net_profit"), ("growth", "profit_cagr_1y")],
+    "operating_margin": [("profitability", "operating_margin")],
+    "roe": [("profitability", "roe")],
+    "roa": [("profitability", "roce")],
+    "debt_to_equity": [("debt_metrics", "debt_to_equity")],
+    "cash_flow": [("cash_flow_quality", "cfo_to_pat"), ("cash_flow_quality", "fcf")],
+    "pe_ratio": [("valuation", "pe_ratio")],
+    "pb_ratio": [("valuation", "pb_ratio")],
+    "gnpa": [("banks", "gnpa"), ("top", "gnpa")],
+    "nnpa": [("banks", "nnpa"), ("top", "nnpa")],
+    "production_volume": [("sector_operating", "total_boe_production"), ("sector_operating", "crude_oil_production_mmt"), ("sector_operating", "natural_gas_production_bcm")],
+    "upstream_production": [("sector_operating", "total_boe_production"), ("sector_operating", "crude_oil_production_mmt")],
+    "net_realisation": [("sector_operating", "crude_realisation_usd_per_bbl"), ("sector_operating", "gas_realisation_usd_per_mmbtu")],
+    "reserve_replacement_ratio": [("sector_operating", "reserve_replacement_ratio")],
+    "refining_margin": [("sector_operating", "gross_refining_margin_usd_per_bbl")],
+    "throughput": [("sector_operating", "refinery_throughput_mmt")],
+    "marketing_volume": [("sector_operating", "marketing_sales_volume_mmt")],
+    "transmission_volume": [("sector_operating", "gas_transmission_volume_mmscmd")],
+    "tariff_realisation": [("sector_operating", "tariff_realisation")],
+    "order_book": [("sector_operating", "order_book")],
+    "deliveries": [("sector_operating", "deliveries")],
+    "receivables": [("sector_operating", "receivables")],
+    "net_debt_or_cash": [("sector_operating", "net_debt_or_cash")],
+    "aum_growth": [("sector_operating", "aum_growth")],
+    "cost_of_borrowing": [("sector_operating", "cost_of_borrowing")],
+    "vnb_margin": [("sector_operating", "vnb_margin")],
+    "ape_growth": [("sector_operating", "ape_growth")],
+    "solvency_ratio": [("sector_operating", "solvency_ratio")],
+    "persistency_ratio": [("sector_operating", "persistency_ratio")],
+    "volumes": [("sector_operating", "volumes")],
+    "capital_adequacy": [("sector_operating", "capital_adequacy")],
 }
 
 
 def is_missing(value: Any) -> bool:
-    """Helper to check if a metric value is missing. Returns True if None or empty string or 'N/A'."""
-    if value is None:
-        return True
-    if isinstance(value, str) and value.strip().upper() in ["", "N/A", "NONE", "NULL", "UNAVAILABLE", "NOT VERIFIED"]:
-        return True
-    return False
+    """Compatibility alias for the canonical missing-data policy."""
+    return is_unknown(value)
+
+
+def get_metric(metrics: dict, group: str, key: str) -> Dict[str, Any]:
+    if not isinstance(metrics, dict):
+        return {}
+    candidate = metrics.get(group, {})
+    item = candidate.get(key) if isinstance(candidate, dict) else None
+    if isinstance(item, dict):
+        return item
+    item = metrics.get(key)
+    return item if isinstance(item, dict) else {}
 
 
 def get_metric_val(metrics: dict, group: str, key: str) -> Optional[Any]:
-    """Safely extracts numerical float or string value from nested computed_metrics dict."""
-    if not isinstance(metrics, dict):
-        return None
-    grp = metrics.get(group, {})
-    if isinstance(grp, dict):
-        item = grp.get(key)
-        if isinstance(item, dict):
-            val = item.get("value")
-            return val if val is not None else None
-        elif item is not None:
-            return item
-    # Flat lookup fallback
-    item = metrics.get(key)
-    if isinstance(item, dict):
-        return item.get("value")
-    return item if item is not None else None
+    value = get_metric(metrics, group, key).get("value")
+    return None if is_unknown(value) else value
 
 
-def get_metric_fmt(metrics: dict, group: str, key: str, fallback: str = "N/A") -> str:
-    """Safely extracts formatted string from nested computed_metrics dict."""
-    if not isinstance(metrics, dict):
-        return fallback
-    grp = metrics.get(group, {})
-    if isinstance(grp, dict):
-        item = grp.get(key)
-        if isinstance(item, dict):
-            fmt = item.get("formatted_string")
-            if fmt and not is_missing(fmt):
-                return fmt
-            val = item.get("value")
-            if val is not None:
-                return str(val)
-    return fallback
+def get_metric_fmt(metrics: dict, group: str, key: str, fallback: str = UNKNOWN) -> str:
+    item = get_metric(metrics, group, key)
+    formatted = item.get("formatted_string")
+    if not is_unknown(formatted):
+        return str(formatted)
+    value = item.get("value")
+    return fallback if is_unknown(value) else str(value)
+
+
+def _metric_available(metrics: dict, key: str) -> bool:
+    for group, metric_name in METRIC_PATHS.get(key, []):
+        if not is_missing(get_metric_val(metrics, group, metric_name)):
+            return True
+    return False
+
+
+def _metric_snapshot(metrics: dict) -> Dict[str, Dict[str, Any]]:
+    """Expose canonical metric objects to every renderer and validator."""
+    snapshot = {}
+    for key, paths in METRIC_PATHS.items():
+        for group, metric_name in paths:
+            item = get_metric(metrics, group, metric_name)
+            if item:
+                snapshot[key] = item
+                break
+    return snapshot
 
 
 class DecisionEngine:
-    """
-    Determines all investment conclusions deterministically.
-    Produces a single structured DecisionSupport object consumed by all UI renderers and reports.
-    """
+    """Build a single deterministic object that renderers may display but not alter."""
 
-    def build(self, dossier: dict, company_type: str, computed_metrics: dict, 
-              evidence_summary: dict, red_flags: list, dividends: list, news: list) -> Dict[str, Any]:
-        
-        info = dossier.get("raw_data", {}).get("info", {}) or dossier.get("info", {})
-        price_data = dossier.get("raw_data", {}).get("price_data", {}) or dossier.get("price_data", {})
-        company_name = dossier.get("company_name", info.get("longName", "Company"))
-        symbol = dossier.get("symbol", "STOCK")
-        
-        c_type = str(company_type or "DEFAULT").upper().strip()
-        is_bank = (c_type == "BANK")
-        is_nbfc = (c_type == "NBFC")
-        is_wind = (c_type == "WIND_EQUIPMENT")
-        is_metals = (c_type == "METALS")
-        is_ep = (c_type in ["OIL_GAS_E&P", "OIL_GAS_INTEGRATED"])
-        is_tech = (c_type in ["IT", "RETAIL"])
+    def build(
+        self,
+        dossier: dict,
+        company_type: str,
+        computed_metrics: dict,
+        evidence_summary: dict,
+        red_flags: list,
+        dividends: list,
+        news: list,
+    ) -> Dict[str, Any]:
+        modules = dossier.get("modules", {}) if isinstance(dossier, dict) else {}
+        raw_data = dossier.get("raw_data") or modules.get("raw_data") or {}
+        info = raw_data.get("info", {}) if isinstance(raw_data, dict) else {}
+        company_name = dossier.get("company_name") or modules.get("company_snapshot", {}).get("name") or info.get("longName") or "Company"
 
-        # ── 1. Extract Metrics ──────────────────────────────────────
-        m_prof = computed_metrics.get("profitability", {}) if isinstance(computed_metrics.get("profitability"), dict) else {}
-        m_grow = computed_metrics.get("growth", {}) if isinstance(computed_metrics.get("growth"), dict) else {}
-        m_val = computed_metrics.get("valuation", {}) if isinstance(computed_metrics.get("valuation"), dict) else {}
-        m_debt = computed_metrics.get("debt_metrics", {}) if isinstance(computed_metrics.get("debt_metrics"), dict) else {}
-        m_cash = computed_metrics.get("cash_flow_quality", {}) if isinstance(computed_metrics.get("cash_flow_quality"), dict) else {}
+        c_type = str(company_type or UNKNOWN).upper().strip()
+        if c_type == "DEFAULT":
+            c_type = UNKNOWN
+        required = REQUIRED_METRICS.get(c_type, REQUIRED_METRICS[UNKNOWN])
+        available = [name for name in required if _metric_available(computed_metrics, name)]
+        missing = [name for name in required if name not in available]
+        coverage_pct = round((len(available) / len(required)) * 100, 1) if required else 0.0
+        coverage_confidence = "HIGH" if coverage_pct >= 80 else "MEDIUM" if coverage_pct >= 60 else "LOW" if coverage_pct >= 40 else "INSUFFICIENT"
 
-        roe_val = get_metric_val(computed_metrics, "profitability", "roe")
-        op_margin_val = get_metric_val(computed_metrics, "profitability", "operating_margin")
-        rev_growth_val = get_metric_val(computed_metrics, "growth", "revenue_cagr_1y")
-        pat_growth_val = get_metric_val(computed_metrics, "growth", "profit_cagr_1y")
-        pe_val = get_metric_val(computed_metrics, "valuation", "pe_ratio")
-        pb_val = get_metric_val(computed_metrics, "valuation", "pb_ratio")
-        de_val = get_metric_val(computed_metrics, "debt_metrics", "debt_to_equity")
-        cfo_pat_val = get_metric_val(computed_metrics, "cash_flow_quality", "cfo_to_pat")
-
+        roe = get_metric_val(computed_metrics, "profitability", "roe")
         roe_fmt = get_metric_fmt(computed_metrics, "profitability", "roe")
-        op_fmt = get_metric_fmt(computed_metrics, "profitability", "operating_margin")
-        rev_fmt = get_metric_fmt(computed_metrics, "growth", "revenue_cagr_1y")
-        pat_fmt = get_metric_fmt(computed_metrics, "growth", "profit_cagr_1y")
+        revenue_growth = get_metric_val(computed_metrics, "growth", "revenue_cagr_1y")
+        revenue_growth_fmt = get_metric_fmt(computed_metrics, "growth", "revenue_cagr_1y")
+        profit_growth = get_metric_val(computed_metrics, "growth", "profit_cagr_1y")
+        profit_growth_fmt = get_metric_fmt(computed_metrics, "growth", "profit_cagr_1y")
+        pe = get_metric_val(computed_metrics, "valuation", "pe_ratio")
         pe_fmt = get_metric_fmt(computed_metrics, "valuation", "pe_ratio")
+        pb = get_metric_val(computed_metrics, "valuation", "pb_ratio")
         pb_fmt = get_metric_fmt(computed_metrics, "valuation", "pb_ratio")
-        de_fmt = get_metric_fmt(computed_metrics, "debt_metrics", "debt_to_equity")
+        debt_to_equity = get_metric_val(computed_metrics, "debt_metrics", "debt_to_equity")
+        debt_to_equity_fmt = get_metric_fmt(computed_metrics, "debt_metrics", "debt_to_equity")
+        net_profit = first_known(get_metric_val(computed_metrics, "financial_summary", "net_profit"), info.get("netIncomeToCommon"))
+        gnpa = first_known(get_metric_val(computed_metrics, "banks", "gnpa"), get_metric_val(computed_metrics, "top", "gnpa"))
+        nnpa = first_known(get_metric_val(computed_metrics, "banks", "nnpa"), get_metric_val(computed_metrics, "top", "nnpa"))
+        gnpa_fmt = get_metric_fmt(computed_metrics, "banks", "gnpa") if not is_missing(get_metric_val(computed_metrics, "banks", "gnpa")) else get_metric_fmt(computed_metrics, "top", "gnpa")
+        nnpa_fmt = get_metric_fmt(computed_metrics, "banks", "nnpa") if not is_missing(get_metric_val(computed_metrics, "banks", "nnpa")) else get_metric_fmt(computed_metrics, "top", "nnpa")
+        danger_flags = [flag for flag in red_flags if isinstance(flag, dict) and str(flag.get("severity", "")).lower() == "danger"]
+        warning_flags = [flag for flag in red_flags if isinstance(flag, dict) and str(flag.get("severity", "")).lower() == "warning"]
 
-        net_income = info.get("netIncomeToCommon") or info.get("trailingEps")
-        gnpa_val = get_metric_val(computed_metrics, "banks", "gnpa") or get_metric_val(computed_metrics, "top", "gnpa")
-        nnpa_val = get_metric_val(computed_metrics, "banks", "nnpa") or get_metric_val(computed_metrics, "top", "nnpa")
-        gnpa_fmt = get_metric_fmt(computed_metrics, "banks", "gnpa")
-        nnpa_fmt = get_metric_fmt(computed_metrics, "banks", "nnpa")
-
-        danger_flags = [rf for rf in red_flags if isinstance(rf, dict) and str(rf.get("severity", "")).lower() == "danger"]
-        warning_flags = [rf for rf in red_flags if isinstance(rf, dict) and str(rf.get("severity", "")).lower() == "warning"]
-
-        # ── 2. Evidence Coverage Gate ──────────────────────────────
-        req_keys = REQUIRED_METRICS.get(c_type, REQUIRED_METRICS["DEFAULT"])
-        avail_keys = []
-        missing_keys = []
-
-        for rk in req_keys:
-            if rk == "revenue" and not is_missing(rev_growth_val): avail_keys.append(rk)
-            elif rk == "profit" and (net_income is not None or not is_missing(pat_growth_val)): avail_keys.append(rk)
-            elif rk in ["operating_margin", "margins"] and not is_missing(op_margin_val): avail_keys.append(rk)
-            elif rk == "roe" and not is_missing(roe_val): avail_keys.append(rk)
-            elif rk == "debt_to_equity" and not is_missing(de_val): avail_keys.append(rk)
-            elif rk == "pe_ratio" and not is_missing(pe_val): avail_keys.append(rk)
-            elif rk == "pb_ratio" and not is_missing(pb_val): avail_keys.append(rk)
-            elif rk == "cfo_to_pat" and not is_missing(cfo_pat_val): avail_keys.append(rk)
-            elif rk == "gnpa" and not is_missing(gnpa_val): avail_keys.append(rk)
-            elif rk == "nnpa" and not is_missing(nnpa_val): avail_keys.append(rk)
-            elif rk == "roa" and not is_missing(roe_val): avail_keys.append(rk)
-            else: missing_keys.append(rk)
-
-        coverage_pct = round((len(avail_keys) / len(req_keys)) * 100, 1) if req_keys else 0.0
-        if coverage_pct >= 80.0:
-            coverage_confidence = "HIGH"
-        elif coverage_pct >= 60.0:
-            coverage_confidence = "MEDIUM"
-        elif coverage_pct >= 40.0:
-            coverage_confidence = "LOW"
+        if is_missing(net_profit) and is_missing(roe):
+            profitability = ("UNKNOWN", "Profitability data is unavailable from the current evidence.", "UNCLEAR - profitability figures are unavailable.")
+        elif isinstance(net_profit, (int, float)) and net_profit < 0:
+            profitability = ("LOSS_MAKING", "The latest available period reports a net loss.", "NO - the latest available period reports a loss.")
+        elif isinstance(roe, (int, float)) and roe > 15:
+            profitability = ("PROFITABLE_STRONG", "The business is generating strong profit from shareholder capital.", "YES - profit generation appears strong in the available figures.")
+        elif isinstance(roe, (int, float)) and roe > 8:
+            profitability = ("PROFITABLE_STABLE", "The business is generating a steady profit from shareholder capital.", "STABLE - available profitability is steady.")
         else:
-            coverage_confidence = "INSUFFICIENT"
+            profitability = ("PROFITABLE_MODEST", "The available profit data indicates modest returns.", "MIXED - returns in the available figures are modest.")
+        prof_status, prof_explanation, business_answer = profitability
+        business_status = "STRONG / IMPROVING" if prof_status == "PROFITABLE_STRONG" else "STABLE" if prof_status == "PROFITABLE_STABLE" else "WEAK / LOSS-MAKING" if prof_status == "LOSS_MAKING" else "MIXED" if prof_status == "PROFITABLE_MODEST" else UNKNOWN
 
-        # ── 3. Tri-State Profitability & Business Health ────────────
-        if is_missing(net_income) and is_missing(roe_val):
-            prof_status = "UNKNOWN"
-            prof_expl = "Profitability data could not be verified from available disclosures."
-            biz_status = "UNKNOWN"
-            biz_doing_well = "UNCLEAR - Profitability disclosures unavailable."
-        elif net_income is not None and isinstance(net_income, (int, float)) and net_income < 0:
-            prof_status = "LOSS_MAKING"
-            prof_expl = f"{company_name} is currently reporting a net loss."
-            biz_status = "WEAK / LOSS-MAKING"
-            biz_doing_well = f"NO - {company_name} is currently loss-making."
-        elif roe_val is not None and roe_val > 15:
-            prof_status = "PROFITABLE_STRONG"
-            prof_expl = f"Strong capital efficiency ({roe_fmt} ROE)."
-            biz_status = "STRONG / IMPROVING"
-            biz_doing_well = f"YES - Operating performance and ROE ({roe_fmt}) are strong."
-        elif roe_val is not None and roe_val > 8:
-            prof_status = "PROFITABLE_STABLE"
-            prof_expl = f"Steady operating returns ({roe_fmt} ROE)."
-            biz_status = "STABLE"
-            biz_doing_well = f"STABLE - Operating performance is steady with {roe_fmt} ROE."
-        else:
-            prof_status = "PROFITABLE_MODEST"
-            prof_expl = f"Operating returns are modest ({roe_fmt} ROE)."
-            biz_status = "MIXED"
-            biz_doing_well = f"MIXED - Operating returns are modest ({roe_fmt} ROE)."
-
-        # ── 4. Tri-State Financial & Solvency Health ────────────────
-        if is_bank:
-            if is_missing(gnpa_val) and is_missing(nnpa_val):
-                fin_status = "UNKNOWN"
-                fin_expl = "Asset-quality disclosures (GNPA/NNPA) could not be verified from available market data."
-                debt_control_str = "UNCLEAR - Asset-quality data (GNPA/NNPA) could not be verified."
-            elif nnpa_val is not None and nnpa_val > 3.0:
-                fin_status = "WEAK_BAD_LOANS"
-                fin_expl = f"Net Bad Loans (NNPA) elevated at {nnpa_fmt}."
-                debt_control_str = f"NO / CONCERN - Net Bad Loans (NNPA) elevated at {nnpa_fmt}."
-            elif gnpa_val is not None and gnpa_val > 5.0:
-                fin_status = "MONITOR_ASSET_QUALITY"
-                fin_expl = f"Gross Bad Loans (GNPA) at {gnpa_fmt} (NNPA: {nnpa_fmt})."
-                debt_control_str = f"MONITOR - Gross Bad Loans (GNPA) at {gnpa_fmt}."
-            elif danger_flags:
-                fin_status = "NEEDS_MONITORING"
-                fin_expl = f"{len(danger_flags)} high-severity forensic flags detected."
-                debt_control_str = f"MONITOR - {len(danger_flags)} danger flags detected."
+        if c_type == "BANK":
+            if is_missing(gnpa) and is_missing(nnpa):
+                fin_status, fin_explanation, debt_answer = "UNKNOWN", "Bad-loan data is unavailable from the current evidence.", "UNCLEAR - bad-loan data is unavailable."
+            elif isinstance(nnpa, (int, float)) and nnpa > 3:
+                fin_status, fin_explanation, debt_answer = "WEAK_BAD_LOANS", f"Net bad loans are elevated at {nnpa_fmt}.", f"CONCERN - net bad loans are elevated at {nnpa_fmt}."
+            elif isinstance(gnpa, (int, float)) and gnpa > 5:
+                fin_status, fin_explanation, debt_answer = "MONITOR_ASSET_QUALITY", f"Gross bad loans are {gnpa_fmt}; asset quality needs monitoring.", f"MONITOR - gross bad loans are {gnpa_fmt}."
             else:
-                fin_status = "COMFORTABLE"
-                fin_expl = f"Bad loans under control (GNPA: {gnpa_fmt}, NNPA: {nnpa_fmt}). Capital position adequate."
-                debt_control_str = f"YES - Bad loans under control (GNPA: {gnpa_fmt}, NNPA: {nnpa_fmt})."
-
-        elif is_wind:
-            fin_status = "MONITOR_EXECUTION"
-            fin_expl = "Order execution, delivery trajectory, O&M cash flows, and working capital intensity require monitoring."
-            debt_control_str = "MONITOR - Evaluate order book execution velocity and receivables."
-
+                fin_status, fin_explanation, debt_answer = "COMFORTABLE", "The available bad-loan metrics do not show an immediate concern.", "YES - available bad loans are within the model thresholds."
+        elif c_type == "WIND_EQUIPMENT":
+            fin_status, fin_explanation, debt_answer = "MONITOR_EXECUTION", "Order execution, collections, and working-capital conversion remain key checks.", "MONITOR - verify order execution and customer collections."
+        elif is_missing(debt_to_equity):
+            fin_status, fin_explanation, debt_answer = "UNKNOWN", "Debt data is unavailable from the current evidence.", "UNCLEAR - borrowing data is unavailable."
+        elif isinstance(debt_to_equity, (int, float)) and debt_to_equity > 2:
+            fin_status, fin_explanation, debt_answer = "HIGH_LEVERAGE", f"Borrowing is high relative to shareholder capital ({debt_to_equity_fmt}).", f"CONCERN - borrowing is high ({debt_to_equity_fmt})."
+        elif danger_flags:
+            fin_status, fin_explanation, debt_answer = "NEEDS_MONITORING", f"{len(danger_flags)} high-severity quantitative flags need review.", f"MONITOR - {len(danger_flags)} high-severity flags need review."
         else:
-            if is_missing(de_val):
-                fin_status = "UNKNOWN"
-                fin_expl = "Borrowing and debt metrics could not be verified."
-                debt_control_str = "UNCLEAR - Debt disclosures unavailable."
-            elif de_val > 2.0:
-                fin_status = "HIGH_LEVERAGE"
-                fin_expl = f"Debt-to-Equity is elevated ({de_fmt})."
-                debt_control_str = f"NO / HIGH RISK - Debt-to-Equity elevated ({de_fmt})."
-            elif danger_flags:
-                fin_status = "NEEDS_MONITORING"
-                fin_expl = f"{len(danger_flags)} danger flags detected."
-                debt_control_str = f"MONITOR - {len(danger_flags)} danger flags detected."
-            elif de_val < 0.5 and not red_flags:
-                fin_status = "COMFORTABLE"
-                fin_expl = f"Borrowing is low ({de_fmt}) and financial position is healthy."
-                debt_control_str = f"YES - Borrowing low ({de_fmt}), comfortable balance sheet."
-            else:
-                fin_status = "STABLE"
-                fin_expl = f"Debt to Equity is {de_fmt}."
-                debt_control_str = f"STABLE - Debt to Equity is {de_fmt}."
+            fin_status, fin_explanation, debt_answer = "STABLE", f"Borrowing is {debt_to_equity_fmt} relative to shareholder capital.", "STABLE - review the trend in borrowing alongside cash generation."
 
-        # ── 5. Tri-State Growth Status ──────────────────────────────
-        if is_missing(rev_growth_val) and is_missing(pat_growth_val):
-            growth_status = "UNKNOWN"
-            growth_expl = "Growth metrics could not be verified from available disclosures."
-            profit_growing_str = "Check P&L filings for YoY profit growth."
-        elif pat_growth_val is not None and pat_growth_val > 15:
-            growth_status = "STRONG"
-            growth_expl = f"Net profit expanded {pat_fmt} YoY."
-            profit_growing_str = f"YES - 1Y Net Profit expanded {pat_fmt} YoY."
-        elif pat_growth_val is not None and pat_growth_val > 0:
-            growth_status = "MODERATE"
-            growth_expl = f"Net profit grew {pat_fmt} YoY."
-            profit_growing_str = f"MODERATE - 1Y Net Profit grew {pat_fmt} YoY."
-        elif pat_growth_val is not None and pat_growth_val < 0:
-            growth_status = "DECLINING"
-            growth_expl = f"Net profit contracted {pat_fmt} YoY."
-            profit_growing_str = f"NO - 1Y Net Profit contracted {pat_fmt} YoY."
-        elif rev_growth_val is not None and rev_growth_val > 0:
-            growth_status = "REVENUE_GROWING"
-            growth_expl = f"Revenue expanded {rev_fmt} YoY."
-            profit_growing_str = f"1Y Revenue grew {rev_fmt} YoY."
+        if is_missing(revenue_growth) and is_missing(profit_growth):
+            growth_status, growth_explanation, growth_answer = "UNKNOWN", "The latest comparable growth figures are unavailable.", "UNCLEAR - comparable growth figures are unavailable."
+        elif isinstance(profit_growth, (int, float)) and profit_growth > 15:
+            growth_status, growth_explanation, growth_answer = "STRONG", f"Profit grew {profit_growth_fmt} against the comparable period.", f"YES - profit grew {profit_growth_fmt} against the comparable period."
+        elif isinstance(profit_growth, (int, float)) and profit_growth > 0:
+            growth_status, growth_explanation, growth_answer = "MODERATE", f"Profit grew {profit_growth_fmt} against the comparable period.", f"MODERATE - profit grew {profit_growth_fmt}."
+        elif isinstance(profit_growth, (int, float)) and profit_growth < 0:
+            growth_status, growth_explanation, growth_answer = "DECLINING", f"Profit fell {profit_growth_fmt} against the comparable period.", f"NO - profit fell {profit_growth_fmt}."
+        elif isinstance(revenue_growth, (int, float)) and revenue_growth > 0:
+            growth_status, growth_explanation, growth_answer = "REVENUE_GROWING", f"Revenue grew {revenue_growth_fmt} against the comparable period.", f"Revenue grew {revenue_growth_fmt}."
         else:
-            growth_status = "STAGNANT"
-            growth_expl = "Growth trajectory requires close quarterly monitoring."
-            profit_growing_str = "Growth trajectory requires quarterly monitoring."
+            growth_status, growth_explanation, growth_answer = "STAGNANT", "The available growth figures show no clear improvement.", "MIXED - no clear growth improvement is visible."
 
-        # ── 6. Tri-State Valuation Engine (Coverage Gated) ─────────
-        if coverage_confidence == "INSUFFICIENT" or (is_bank and (is_missing(gnpa_val) or is_missing(nnpa_val))):
-            val_status = "DIFFICULT_TO_JUDGE"
-            val_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
-            val_expl = "Key required financial disclosures (asset quality/coverage) are unavailable."
-            cheap_answer = "UNCLEAR - Insufficient verified data to evaluate valuation reliably."
-        elif prof_status == "LOSS_MAKING":
-            val_status = "LOSS_MAKING"
-            val_verdict = "🔴 VERY EXPENSIVE / LOSS-MAKING"
-            val_expl = "Company is reporting net losses; standard valuation multiples are not usable."
-            cheap_answer = "NO - Enterprise is currently loss-making."
-        elif is_bank:
-            if is_missing(pb_val):
-                val_status = "UNKNOWN"
-                val_verdict = "⚪ DIFFICULT TO JUDGE RELIABLY"
-                val_expl = "Price-to-Book multiple is unavailable."
-                cheap_answer = "UNCLEAR - Price-to-Book multiple unavailable."
-            elif pb_val > 3.0:
-                val_status = "VERY_EXPENSIVE"
-                val_verdict = "🔴 VERY EXPENSIVE"
-                val_expl = f"Bank trades at a high price-to-book multiple of {pb_fmt} net worth."
-                cheap_answer = f"NO - Traded at a premium Price-to-Book multiple of {pb_fmt}."
-            elif pb_val > 1.8:
-                val_status = "EXPENSIVE"
-                val_verdict = "🟠 EXPENSIVE"
-                val_expl = f"Bank trades at {pb_fmt} Price-to-Book multiple."
-                cheap_answer = f"NO - Price-to-Book multiple is {pb_fmt}."
-            elif pb_val < 1.0 and (roe_val is not None and roe_val > 12):
-                val_status = "ATTRACTIVE"
-                val_verdict = "🟢 ATTRACTIVE"
-                val_expl = f"Bank trades below book value ({pb_fmt} P/B) while generating {roe_fmt} ROE."
-                cheap_answer = f"YES - Attractively valued below book value ({pb_fmt} P/B)."
-            else:
-                val_status = "FAIR"
-                val_verdict = "🟡 FAIR"
-                val_expl = f"Bank trades at a reasonable P/B multiple of {pb_fmt}."
-                cheap_answer = f"FAIR - Priced at {pb_fmt} P/B."
-        elif is_metals:
-            if is_missing(pe_val):
-                val_status = "UNKNOWN"
-                val_verdict = "⚪ UNKNOWN"
-                val_expl = "Valuation multiple unavailable."
-                cheap_answer = "UNCLEAR - Valuation metrics unavailable."
-            elif pe_val < 10:
-                val_status = "CYCLICAL_PEAK_WARNING"
-                val_verdict = "🟡 LOW P/E (CYCLICAL PEAK WARNING)"
-                val_expl = f"Metals company trades at low P/E ({pe_fmt}). Low P/E in cyclical commodities can occur near peak earnings."
-                cheap_answer = f"CAUTION - Low P/E of {pe_fmt} may reflect peak cyclical earnings."
-            else:
-                val_status = "FAIR"
-                val_verdict = "🟡 FAIR"
-                val_expl = f"Trades at {pe_fmt} P/E multiple."
-                cheap_answer = f"FAIR - Traded at {pe_fmt} P/E."
-        else:
-            if is_missing(pe_val):
-                val_status = "UNKNOWN"
-                val_verdict = "⚪ UNKNOWN"
-                val_expl = "P/E ratio unavailable."
-                cheap_answer = "UNCLEAR - Valuation metrics unavailable."
-            elif pe_val > 50:
-                val_status = "VERY_EXPENSIVE"
-                val_verdict = "🔴 VERY EXPENSIVE"
-                val_expl = f"Investors are paying a high growth multiple of {pe_fmt} trailing earnings."
-                cheap_answer = f"NO - Traded at a high premium multiple of {pe_fmt} P/E."
-            elif pe_val > 28:
-                val_status = "EXPENSIVE"
-                val_verdict = "🟠 EXPENSIVE"
-                val_expl = f"Valued at a premium multiple of {pe_fmt} P/E."
-                cheap_answer = f"NO - Traded at a premium multiple of {pe_fmt} P/E."
-            elif pe_val < 15 and roe_val is not None and roe_val > 12:
-                val_status = "ATTRACTIVE"
-                val_verdict = "🟢 ATTRACTIVE"
-                val_expl = f"Attractively priced at {pe_fmt} P/E relative to operating return ({roe_fmt} ROE)."
-                cheap_answer = f"YES - Attractively priced at {pe_fmt} P/E."
-            else:
-                val_status = "FAIR"
-                val_verdict = "🟡 FAIR"
-                val_expl = f"Trades at a reasonable P/E multiple of {pe_fmt}."
-                cheap_answer = f"FAIR - Reasonably priced at {pe_fmt} P/E."
-
-        # ── 7. Tri-State Dividend Evaluation ─────────────────────────
-        div_yield = info.get("dividendYield", 0) or 0
-        raw_divs = dividends if isinstance(dividends, list) else []
-        if isinstance(raw_divs, dict) and "dividends" in raw_divs:
-            raw_divs = raw_divs["dividends"]
-        if not isinstance(raw_divs, list):
-            raw_divs = []
-
-        years_paid = set()
-        for d in raw_divs:
-            if isinstance(d, dict):
-                dt_str = str(d.get("Date", d.get("date", "")))
-                if len(dt_str) >= 4 and dt_str[:4].isdigit():
-                    yr = int(dt_str[:4])
-                    if yr >= 2021:
-                        years_paid.add(yr)
-
-        num_years = len(years_paid)
-        if not raw_divs and div_yield == 0:
-            div_status = "NO_VERIFIED_DIVIDEND"
-            div_expl = "No verified recent dividend payments recorded."
-            div_str = "NO VERIFIED RECENT DIVIDEND"
-        elif num_years >= 4:
-            div_status = "REGULAR_RECENTLY"
-            div_expl = f"Regular dividend track record ({num_years}/5 recent years paid)."
-            div_str = f"REGULAR RECENTLY ({num_years}/5 years paid)"
-        elif num_years >= 1 or div_yield > 0:
-            div_status = "IRREGULAR"
-            div_expl = f"Irregular dividend payments ({num_years}/5 recent years paid)."
-            div_str = f"IRREGULAR ({num_years}/5 years paid)"
-        else:
-            div_status = "NO_VERIFIED_DIVIDEND"
-            div_expl = "No verified recent dividend payments recorded."
-            div_str = "NO VERIFIED RECENT DIVIDEND"
-
-        # ── 8. Risk Level & Tip Check ────────────────────────────────
-        if danger_flags or prof_status == "LOSS_MAKING" or fin_status in ["HIGH_LEVERAGE", "WEAK_BAD_LOANS"]:
-            risk_level = "HIGH"
-        elif len(red_flags) > 1 or fin_status in ["MONITOR_ASSET_QUALITY", "NEEDS_MONITORING"]:
-            risk_level = "MEDIUM-HIGH"
-        else:
-            risk_level = "MEDIUM"
-
-        if prof_status == "LOSS_MAKING" or fin_status in ["WEAK_BAD_LOANS", "HIGH_LEVERAGE"]:
-            tip_result = "MAJOR FUNDAMENTAL CONCERNS"
-        elif danger_flags or fin_status == "NEEDS_MONITORING" or val_status in ["VERY_EXPENSIVE", "EXPENSIVE"]:
-            tip_result = "HIGH EXPECTATIONS / IMPORTANT RISKS"
-        elif prof_status in ["PROFITABLE_STRONG", "PROFITABLE_STABLE"] and fin_status in ["COMFORTABLE", "STABLE"]:
-            tip_result = "FUNDAMENTALLY SUPPORTED IDEA"
-        else:
-            tip_result = "MIXED FUNDAMENTALS"
-
-        # ── 9. Research Status & Bottom Line ─────────────────────────
         if coverage_confidence == "INSUFFICIENT":
-            res_status = "Research View: ⚪ Insufficient Verified Data / Verification Required"
-            bottom_line = f"Primary financial disclosures for {company_name} are insufficient to formulate a high-confidence research judgment. Verify filings directly."
-        elif "STRONG" in biz_status and val_status == "ATTRACTIVE":
-            res_status = "Research View: 🟢 Strong Business / 🟢 Attractive Price"
-            bottom_line = f"{company_name} displays strong fundamental efficiency and is currently priced attractively relative to operating returns."
-        elif "STRONG" in biz_status and val_status in ["EXPENSIVE", "VERY_EXPENSIVE", "FAIR"]:
-            res_status = "Research View: 🟢 Strong Business / 🟡 Price Matters"
-            bottom_line = f"There are currently more positives than negatives in {company_name}'s core business. However, a good company is not automatically a bargain at every price."
-        elif "WEAK" in biz_status or "LOSS" in biz_status:
-            res_status = "Research View: 🔴 Major Fundamental Concerns / 🔴 Avoid Unproven Turnarounds"
-            bottom_line = f"{company_name} is currently facing material operational or profitability headwinds. Unproven turnarounds carry elevated risk."
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "DIFFICULT_TO_JUDGE", "DIFFICULT TO JUDGE RELIABLY", "Sector-critical inputs are unavailable, so valuation cannot be judged reliably.", "UNCLEAR - sector-critical inputs are unavailable."
+        elif c_type in {"OIL_GAS_E&P", "OIL_GAS_INTEGRATED"}:
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "CYCLE_SENSITIVE", "CYCLE-SENSITIVE / MULTI-FACTOR REVIEW REQUIRED", "A low earnings multiple alone cannot establish value for an oil and gas producer. Production, realised prices, reserves, project execution, and cash flow must also be verified.", "UNCLEAR - commodity-cycle and operating inputs require verification."
+        elif c_type == "BANK":
+            if is_missing(pb):
+                valuation_status, valuation_label, valuation_explanation, cheap_answer = "UNKNOWN", "UNKNOWN", "Price-to-book data is unavailable.", "UNCLEAR - valuation data is unavailable."
+            elif pb > 3:
+                valuation_status, valuation_label, valuation_explanation, cheap_answer = "VERY_EXPENSIVE", "VERY EXPENSIVE", f"The bank trades at {pb_fmt} times book value.", f"NO - the available price-to-book multiple is {pb_fmt}."
+            elif pb < 1 and isinstance(roe, (int, float)) and roe > 12:
+                valuation_status, valuation_label, valuation_explanation, cheap_answer = "ATTRACTIVE", "ATTRACTIVE", f"The bank trades below book value ({pb_fmt}) while the available return measure is strong.", "POTENTIALLY ATTRACTIVE - verify asset quality and capital before drawing a conclusion."
+            else:
+                valuation_status, valuation_label, valuation_explanation, cheap_answer = "FAIR", "FAIR", f"The available price-to-book multiple is {pb_fmt}.", "FAIR - verify asset quality and profitability trends."
+        elif is_missing(pe):
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "UNKNOWN", "UNKNOWN", "Earnings-multiple data is unavailable.", "UNCLEAR - valuation data is unavailable."
+        elif pe > 50:
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "VERY_EXPENSIVE", "VERY EXPENSIVE", f"The available earnings multiple is {pe_fmt}.", f"NO - the available earnings multiple is {pe_fmt}."
+        elif pe > 28:
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "EXPENSIVE", "EXPENSIVE", f"The available earnings multiple is {pe_fmt}.", f"NO - the available earnings multiple is {pe_fmt}."
+        elif pe < 15 and isinstance(roe, (int, float)) and roe > 12:
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "ATTRACTIVE", "ATTRACTIVE", f"The available earnings multiple is {pe_fmt} alongside strong returns.", "POTENTIALLY ATTRACTIVE - verify the quality and durability of earnings."
         else:
-            res_status = "Research View: 🟡 Mixed Fundamentals / 🟡 Perform Detailed Verification"
-            bottom_line = f"{company_name} demonstrates mixed fundamental indicators. Evaluate debt trajectory and margin recovery velocity closely."
+            valuation_status, valuation_label, valuation_explanation, cheap_answer = "FAIR", "FAIR", f"The available earnings multiple is {pe_fmt}.", "FAIR - evaluate the multiple against future earnings quality."
 
-        # ── 10. 7-Point Tip Check Rows ──────────────────────────────
-        tip_check_rows = [
-            {"Question": "Does the company make money?", "Simple answer": biz_doing_well},
-            {"Question": "Is profit improving?", "Simple answer": profit_growing_str},
-            {"Question": "Is the core business growing?", "Simple answer": f"1Y Revenue growth is {rev_fmt}." if not is_missing(rev_growth_val) else "Check quarterly revenue trajectory."},
-            {"Question": "Are bad loans / debt a major current problem?", "Simple answer": debt_control_str},
-            {"Question": "Does it pay dividends?", "Simple answer": div_str},
-            {"Question": "Is it obviously cheap?", "Simple answer": cheap_answer},
-            {"Question": "Main thing people may overlook", "Simple answer": "Valuation multiples and operating cash flow conversion."}
-        ]
-
-        # ── 11. Watch Next List ─────────────────────────────────────
-        if is_bank:
-            watch_next = [
-                "Net Interest Margin (NIM spread) trajectory",
-                "Gross & Net NPA bad-loan slippages in quarterly filings",
-                "Growth in low-cost CASA savings deposits",
-                "Capital Adequacy Ratio (CRAR / CET1 buffer)"
-            ]
-        elif is_wind:
-            watch_next = [
-                "Quarterly order book execution and MW delivery trajectory",
-                "Growth and profitability of recurring O&M service business",
-                "Working capital cycle, inventory, and receivables collection",
-                "Net debt reduction and cash flow conversion"
-            ]
+        dividend_data = computed_metrics.get("fy_dividends", {}) if isinstance(computed_metrics, dict) else {}
+        paid_years = dividend_data.get("num_years_paid") if isinstance(dividend_data, dict) else None
+        dividend_label = dividend_data.get("years_paid_str", UNKNOWN) if isinstance(dividend_data, dict) else UNKNOWN
+        if isinstance(paid_years, int) and paid_years >= 4:
+            dividend_status, dividend_explanation = "REGULAR_RECENTLY", f"Recorded dividends were paid in {dividend_label}."
+        elif isinstance(paid_years, int) and paid_years > 0:
+            dividend_status, dividend_explanation = "IRREGULAR", f"Recorded dividends were paid in {dividend_label}."
         else:
-            watch_next = [
-                "Quarterly revenue and customer demand velocity",
-                "Operating profit margin trajectory left after expenses",
-                "Actual cash flow from operations (CFO) vs reported net profit",
-                "Debt service coverage and interest cost burden"
-            ]
+            dividend_status, dividend_explanation, dividend_label = "UNKNOWN", "Recent dividend history is unavailable.", "UNKNOWN"
 
-        # ── 12. Positives & Risks Lists ──────────────────────────────
+        risk_level = "HIGH" if coverage_confidence == "INSUFFICIENT" or danger_flags or prof_status == "LOSS_MAKING" or fin_status in {"HIGH_LEVERAGE", "WEAK_BAD_LOANS"} else "MEDIUM-HIGH" if warning_flags or fin_status.startswith("MONITOR") else "MEDIUM"
+        tip_status = "INSUFFICIENT DATA" if coverage_confidence == "INSUFFICIENT" else "MAJOR FUNDAMENTAL CONCERNS" if prof_status == "LOSS_MAKING" or fin_status in {"HIGH_LEVERAGE", "WEAK_BAD_LOANS"} else "HIGH EXPECTATIONS / IMPORTANT RISKS" if danger_flags or valuation_status in {"VERY_EXPENSIVE", "EXPENSIVE"} else "FUNDAMENTALLY SUPPORTED IDEA" if prof_status in {"PROFITABLE_STRONG", "PROFITABLE_STABLE"} and fin_status in {"COMFORTABLE", "STABLE"} else "MIXED FUNDAMENTALS"
+
+        if coverage_confidence == "INSUFFICIENT":
+            research_status = "Research View: Insufficient Data / Verification Required"
+            bottom_line = f"The current evidence for {company_name} does not support a reliable research judgment. Verify primary filings and sector operating data."
+        elif prof_status == "LOSS_MAKING":
+            research_status = "Research View: Material Fundamental Concerns"
+            bottom_line = f"{company_name} is loss-making in the latest available data. Review the cause, financing needs, and recovery evidence."
+        elif business_status == "STRONG / IMPROVING":
+            research_status = "Research View: Strong Operations / Price and Evidence Matter"
+            bottom_line = f"{company_name} shows strong available operating evidence, but valuation and remaining information gaps still need independent verification."
+        else:
+            research_status = "Research View: Mixed Fundamentals / Verify Further"
+            bottom_line = f"{company_name} has mixed available indicators. Review the missing metrics and next reporting period before forming a view."
+
+        if c_type == "OIL_GAS_E&P":
+            watch_next = ["Crude and gas production volume", "Realised price after taxes and levies", "Reserve replacement and new discoveries", "Major development-project execution and capital spending"]
+        elif c_type == "WIND_EQUIPMENT":
+            watch_next = ["Order-book execution and deliveries", "Customer collections and receivables", "Working-capital movement", "Operating cash generation after capital spending"]
+        elif c_type == "BANK":
+            watch_next = ["Bad-loan additions and recoveries", "Deposit growth and funding cost", "Capital buffer", "Profitability trend"]
+        else:
+            watch_next = ["Revenue trend in the next reported period", "Operating profitability", "Cash generated relative to reported profit", "Borrowing and interest burden"]
+
         positives = []
-        if prof_status in ["PROFITABLE_STRONG", "PROFITABLE_STABLE"]:
-            positives.append(f"Operating profitability is established ({roe_fmt} ROE).")
-        if growth_status in ["STRONG", "MODERATE"]:
-            positives.append(f"1Y Net profit trajectory expanded {pat_fmt} YoY.")
-        if fin_status == "COMFORTABLE":
-            positives.append("Balance sheet financial health is comfortable.")
+        if prof_status in {"PROFITABLE_STRONG", "PROFITABLE_STABLE"}:
+            positives.append("Available figures show an established profit base.")
+        if growth_status in {"STRONG", "MODERATE", "REVENUE_GROWING"}:
+            positives.append("Available comparable-period data shows growth.")
+        if fin_status in {"COMFORTABLE", "STABLE"}:
+            positives.append("Available balance-sheet indicators are not above the model thresholds.")
         if not positives:
-            positives.append("Core operational scale and market presence.")
+            positives.append("No evidence-backed positive can be stated from the current data.")
 
         risks = []
-        if prof_status == "LOSS_MAKING":
-            risks.append("Company is currently reporting a net loss.")
-        if fin_status in ["HIGH_LEVERAGE", "WEAK_BAD_LOANS"]:
-            risks.append(f"Financial leverage or bad-loan indicators require monitoring ({fin_expl}).")
+        if coverage_confidence in {"INSUFFICIENT", "LOW"}:
+            risks.append("Important sector and filing inputs are missing or only secondary-sourced.")
         if danger_flags:
-            risks.append(f"{len(danger_flags)} high-severity forensic red flags detected.")
-        if val_status in ["VERY_EXPENSIVE", "EXPENSIVE"]:
-            risks.append(f"Share price trades at a premium valuation multiple ({pe_fmt} P/E / {pb_fmt} P/B).")
+            risks.append(f"{len(danger_flags)} high-severity quantitative flags require review.")
+        if fin_status in {"HIGH_LEVERAGE", "WEAK_BAD_LOANS", "MONITOR_EXECUTION", "MONITOR_ASSET_QUALITY"}:
+            risks.append(fin_explanation)
+        if valuation_status in {"VERY_EXPENSIVE", "EXPENSIVE", "CYCLE_SENSITIVE"}:
+            risks.append(valuation_explanation)
         if not risks:
-            risks.append("Margin sensitivity to economic cycles and input cost inflation.")
+            risks.append("Future reported performance can differ from the available secondary data.")
+
+        tip_rows = [
+            {"Question": "Does the company make money?", "Simple answer": business_answer},
+            {"Question": "Is profit improving?", "Simple answer": growth_answer},
+            {"Question": "Is the core business growing?", "Simple answer": f"Revenue changed {revenue_growth_fmt} against the comparable period." if not is_missing(revenue_growth) else "UNCLEAR - comparable revenue data is unavailable."},
+            {"Question": "Are bad loans or debt a major current problem?", "Simple answer": debt_answer},
+            {"Question": "Does it pay dividends?", "Simple answer": dividend_label},
+            {"Question": "Is the share price obviously cheap?", "Simple answer": cheap_answer},
+            {"Question": "Main thing to verify next", "Simple answer": watch_next[0]},
+        ]
 
         return {
             "company_type": c_type,
-            "business_health": {
-                "status": biz_status,
-                "confidence": coverage_confidence,
-                "explanation": f"Evaluated from operating return ({roe_fmt} ROE) and revenue trajectory ({rev_fmt})."
-            },
-            "profitability": {
-                "status": prof_status,
-                "confidence": coverage_confidence,
-                "explanation": prof_expl
-            },
-            "financial_health": {
-                "status": fin_status,
-                "confidence": coverage_confidence,
-                "explanation": fin_expl,
-                "debt_control_text": debt_control_str
-            },
-            "growth": {
-                "status": growth_status,
-                "confidence": coverage_confidence,
-                "explanation": growth_expl
-            },
-            "valuation": {
-                "status": val_status,
-                "verdict_label": val_verdict,
-                "confidence": coverage_confidence,
-                "explanation": val_expl,
-                "cheap_answer": cheap_answer
-            },
-            "dividend": {
-                "status": div_status,
-                "confidence": coverage_confidence,
-                "explanation": div_expl,
-                "formatted_label": div_str
-            },
+            "business_health": {"status": business_status, "confidence": coverage_confidence, "explanation": prof_explanation},
+            "profitability": {"status": prof_status, "confidence": coverage_confidence, "explanation": prof_explanation},
+            "financial_health": {"status": fin_status, "confidence": coverage_confidence, "explanation": fin_explanation, "debt_control_text": debt_answer},
+            "growth": {"status": growth_status, "confidence": coverage_confidence, "explanation": growth_explanation},
+            "valuation": {"status": valuation_status, "verdict_label": valuation_label, "confidence": coverage_confidence, "explanation": valuation_explanation, "cheap_answer": cheap_answer},
+            "dividend": {"status": dividend_status, "confidence": coverage_confidence, "explanation": dividend_explanation, "formatted_label": dividend_label},
             "risk_level": risk_level,
             "positives": positives,
             "risks": risks,
             "watch_next": watch_next,
-            "tip_check": {
-                "status": tip_result,
-                "rows": tip_check_rows
-            },
+            "tip_check": {"status": tip_status, "rows": tip_rows},
             "bottom_line": bottom_line,
-            "research_status": res_status,
-            "coverage": {
-                "required_metrics": req_keys,
-                "available_metrics": avail_keys,
-                "missing_metrics": missing_keys,
-                "coverage_pct": coverage_pct,
-                "confidence": coverage_confidence
-            }
+            "research_status": research_status,
+            "coverage": {"required_metrics": required, "available_metrics": available, "missing_metrics": missing, "coverage_pct": coverage_pct, "confidence": coverage_confidence},
+            "metric_snapshot": _metric_snapshot(computed_metrics),
+            "period_context": computed_metrics.get("period_context", {}) if isinstance(computed_metrics, dict) else {},
+            "evidence_summary": evidence_summary if isinstance(evidence_summary, dict) else {},
         }

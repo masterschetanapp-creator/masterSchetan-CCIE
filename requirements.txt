@@ -6,3 +6,6 @@ plotly
 python-dotenv
 requests
 beautifulsoup4
+streamlit
+pytest
+pypdf
