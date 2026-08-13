@@ -181,8 +181,13 @@ def classify_company_type(sector: str = "", industry: str = "", company_name: st
     return "DEFAULT"
 
 
-def get_sector_template(company_type: str) -> dict:
-    """Return the sector template dictionary for a canonical company_type string code."""
+def get_sector_template(company_type: str = "", industry: str = "", company_name: str = "", symbol: str = "") -> dict:
+    """Return the sector template dictionary for a canonical company_type or (sector, industry, company_name, symbol)."""
+    if industry or company_name or symbol:
+        company_type = classify_company_type(company_type, industry, company_name, symbol)
+    elif company_type.upper() not in ["BANK", "NBFC", "INSURANCE", "AUTO", "IT", "PHARMA", "UTILITIES", "CAPITAL_GOODS", "METALS", "REAL_ESTATE", "FMCG"]:
+        company_type = classify_company_type(company_type, "", "", "")
+
     mapping = {
         "BANK": SECTOR_METRICS["banks"],
         "NBFC": SECTOR_METRICS["nbfc"],
